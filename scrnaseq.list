@@ -1,0 +1,36 @@
+{
+    "processes": [
+        {
+            "name": "NFCORE_SCRNASEQ:SCRNASEQ:STARSOLO:STAR_GENOMEGENERATE",
+            "container": "quay.io/biocontainers/mulled-v2-1fa26d1ce03c295fe2fdcf85831a92fbcbd7e8c2:ded3841da0194af2701c780e9b3d653a85d27489-0"
+        },
+        {
+            "name": "NFCORE_SCRNASEQ:SCRNASEQ:H5AD_CONVERSION:CONCAT_H5AD",
+            "container": "community.wave.seqera.io/library/scanpy:1.10.2--e83da2205b92a538"
+        },
+        {
+            "name": "NFCORE_SCRNASEQ:SCRNASEQ:STARSOLO:STAR_ALIGN",
+            "container": "quay.io/biocontainers/star:2.7.10b--h9ee0642_0"
+        },
+        {
+            "name": "NFCORE_SCRNASEQ:SCRNASEQ:MULTIQC",
+            "container": "quay.io/biocontainers/multiqc:1.27--pyhdfd78af_0"
+        },
+        {
+            "name": "NFCORE_SCRNASEQ:SCRNASEQ:MTX_TO_H5AD",
+            "container": "community.wave.seqera.io/library/scanpy:1.10.2--e83da2205b92a538"
+        },
+        {
+            "name": "NFCORE_SCRNASEQ:SCRNASEQ:H5AD_CONVERSION:ANNDATAR_CONVERT",
+            "container": "docker.io/nfcore/anndatar:20241129"
+        },
+        {
+            "name": "NFCORE_SCRNASEQ:SCRNASEQ:GTF_GENE_FILTER",
+            "container": "quay.io/biocontainers/python:3.9--1"
+        },
+        {
+            "name": "NFCORE_SCRNASEQ:SCRNASEQ:FASTQC_CHECK:FASTQC",
+            "container": "quay.io/biocontainers/fastqc:0.12.1--hdfd78af_0"
+        }
+    ]
+}
