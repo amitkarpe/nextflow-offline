@@ -128,4 +128,12 @@ cd /path/to/nextflow-offline
 *   **Configuration:** Make paths and pipeline names command-line arguments.
 *   **Plugins:** Handle offline Nextflow plugins.
 *   **ECR:** Explore using AWS ECR instead of saving/loading `.tgz` files.
-*   **Singularity:** Adapt the process for Singularity containers. 
+*   **Singularity:** Adapt the process for Singularity containers.
+
+## Agent Workflow
+
+For repository work, read [AGENTS.md](AGENTS.md), [CONTEXT.md](CONTEXT.md),
+and [SPEC.md](SPEC.md) first. The next planned proof is one offline Sarek happy
+path; the existing scripts currently describe the `scrnaseq` demonstration.
+Reusable repository guidance is available in
+[Agent OS](https://github.com/amitkarpe/agent-os).
