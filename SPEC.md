@@ -40,7 +40,27 @@ PUBLISH_S3=no     # default fast engineering loop
 PUBLISH_S3=yes    # explicit transfer/release proof only
 ```
 
-When publication is enabled, use an exact bounded `PUBLISH_PREFIX`. The builder records the destination and rejects an existing object by default.
+When publication is enabled, use an exact bounded `PUBLISH_PREFIX`. The canonical builder records the destination and rejects an existing object by default.
+
+## Standalone Colleague-Facing Interface
+
+The repository also contains a merged standalone handoff under:
+
+```text
+docs/ops/
+  magic-online.sh
+  magic-offline.sh
+  validate-bundle.sh
+  magic.env.example
+  pipelines.tsv
+  testdata.tsv
+```
+
+PR #8 validated its `nf-core/demo` 1.0.2 path with a relocated same-online-server offline-emulation proof. That proof established Skopeo archive creation, preserved image names/tags, isolated Podman archive loading, bundle-local Nextflow state, explicit `-offline`, task network isolation, and successful FASTQC/SEQTK_TRIM/MULTIQC execution.
+
+The `docs/ops/**` path remains a standalone colleague-facing handoff. It is not a replacement for the canonical `offline/**` implementation, and the two implementations must not be silently merged.
+
+The PR #8 proof did **not** validate S3 publication for the standalone handoff. Treat that optional behavior as a separate transfer/release concern.
 
 ## Bundle Contract
 
@@ -112,7 +132,7 @@ online server
 
 Level 1 proves bundle relocatability and self-contained runtime behavior under enforced offline controls. It does not prove physical network isolation of the host.
 
-Current canonical implementation milestone: **Issue #12 / PR #14**.
+The standalone `docs/ops/**` demo path has completed this proof. The current canonical implementation milestone remains **Issue #12 / PR #14** for the merged `offline/**` path.
 
 ### Level 2 — bounded S3 transfer/release proof
 
@@ -120,7 +140,9 @@ Use occasionally, not for every iteration.
 
 A successful Level 2 proof demonstrates that an exact bundle can be published to a bounded S3 prefix and read back with the required bundle layout intact.
 
-Phase 1 already proved this once for the demo bundle. `offline/verify_published_bundle.sh <exact-s3-prefix>` provides non-destructive readback/inventory validation.
+Phase 1 already proved this once for the canonical demo bundle. `offline/verify_published_bundle.sh <exact-s3-prefix>` provides non-destructive readback/inventory validation.
+
+A Level 1 success does not automatically validate another implementation's S3 publication behavior.
 
 ### Level 3 — real offline-server acceptance gate
 
@@ -148,11 +170,14 @@ Sarek-specific work may add scale concerns such as many images, larger reference
 - optional S3 publication is explicit and bounded;
 - no heavy generated content or secrets enter Git.
 
-## Parallel Lane Boundary
+## Implementation Boundaries
 
-Issue #7 / PR #8 owns the standalone colleague-facing `docs/ops/**` Magic Script experiment. It is intentionally separate from the canonical `offline/` implementation until its own runtime proof is reviewed.
+Two implementations now coexist intentionally:
 
-Do not silently merge the two implementation paths while either lane is active.
+- `offline/**` — canonical implementation, currently owned by Issue #12 / PR #14 for its fast relocated-bundle proof;
+- `docs/ops/**` — merged standalone colleague-facing Magic Script handoff, validated for the demo Level 1 proof.
+
+Do not silently combine the two implementations. Share a proven improvement only through a focused issue/PR with explicit ownership and validation.
 
 ## No-Go and Deferred Work
 
