@@ -89,12 +89,15 @@ trap 'rm -rf "$STAGE_ROOT"' EXIT
 
 PIPELINE_NAME="${PIPELINE##*/}"
 PUBLISH_URI=""
+PUBLISH_BUCKET=""
+PUBLISH_KEY_PREFIX=""
 if [ "$PUBLISH_S3" = yes ]; then
   PUBLISH_URI="${PUBLISH_PREFIX:-${S3_ROOT%/}/${PIPELINE_NAME}/${REVISION}/}"
   PUBLISH_URI="${PUBLISH_URI%/}/"
   publish_path="${PUBLISH_URI#s3://}"
-  publish_key="${publish_path#*/}"
-  if [ "$publish_path" = "$publish_key" ] || [ -z "${publish_key%/}" ]; then
+  PUBLISH_BUCKET="${publish_path%%/*}"
+  PUBLISH_KEY_PREFIX="${publish_path#*/}"
+  if [ "$publish_path" = "$PUBLISH_KEY_PREFIX" ] || [ -z "${PUBLISH_KEY_PREFIX%/}" ]; then
     echo "PUBLISH_PREFIX must include a bucket and non-empty key prefix: $PUBLISH_URI" >&2
     exit 1
   fi
@@ -296,9 +299,17 @@ EOF
     sort -z | xargs -0 sha256sum
 ) > "$BUNDLE_ROOT/manifests/files.sha256"
 if [ "$PUBLISH_S3" = yes ]; then
-  if [ "$PUBLISH_REQUIRE_EMPTY" = yes ] && [ -n "$(aws s3 ls "$PUBLISH_URI" --recursive)" ]; then
-    echo "refusing to publish to non-empty prefix: $PUBLISH_URI" >&2
-    exit 1
+  if [ "$PUBLISH_REQUIRE_EMPTY" = yes ]; then
+    existing_key_count="$(aws s3api list-objects-v2 \
+      --bucket "$PUBLISH_BUCKET" \
+      --prefix "$PUBLISH_KEY_PREFIX" \
+      --max-keys 1 \
+      --query 'KeyCount' \
+      --output text)"
+    if [ "$existing_key_count" != 0 ]; then
+      echo "refusing to publish to non-empty prefix: $PUBLISH_URI" >&2
+      exit 1
+    fi
   fi
   aws s3 sync "$BUNDLE_ROOT/" "$PUBLISH_URI" --only-show-errors
 fi
