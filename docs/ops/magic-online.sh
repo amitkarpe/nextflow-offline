@@ -39,7 +39,7 @@ mkdir -p "$BUNDLE_ROOT"/{containers,plugins,data/reads,data/refs,offline,manifes
 
 nf-core pipelines download "$PIPELINE_REF" -r "$REVISION" \
   --outdir "$BUNDLE_ROOT" --compress none --container-system none \
-  --download-configuration --force
+  --download-configuration yes --force
 
 WORKFLOW_DIR="$BUNDLE_ROOT/workflow"
 MAIN_NF="$(find "$BUNDLE_ROOT" -type f -name main.nf -print -quit)"
