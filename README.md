@@ -24,11 +24,13 @@ See `docs/validation-strategy.md` for what each level proves.
 
 Current canonical implementation milestone:
 
-- Issue #12 / PR #14 — fast same-**online server** relocated-bundle offline-emulation proof.
+- Issue #12 / PR #14 — fast same-**online server** relocated-bundle offline-emulation proof for the canonical `offline/` implementation.
 
-Separate experimental lane:
+Validated colleague-facing handoff:
 
-- Issue #7 / PR #8 — standalone colleague-facing `docs/ops/**` Magic Script validation. It is not part of the canonical `offline/` path until separately tested and reviewed.
+- `docs/ops/**` — merged through PR #8 after a successful `nf-core/demo` 1.0.2 relocated offline-emulation proof. The proof loaded all three portable image archives into isolated Podman storage, preserved image names/tags, used bundle-local Nextflow state, explicit `-offline`, and task network isolation. S3 publication was not part of that proof.
+
+These are separate implementation paths. Do not silently combine them; promote shared ideas only through focused reviewed changes.
 
 Sarek is a later scale-up milestone, not the immediate default task.
 
@@ -114,6 +116,20 @@ The `offline_smoke` profile uses the local executor and Podman task network isol
 
 `nextflow -offline` is one control in this proof; by itself it is not evidence of an air-gapped host.
 
+## Standalone colleague-facing Magic Script
+
+The merged `docs/ops/**` path is intended to be copied as a small handoff package. Start with:
+
+```bash
+cd docs/ops
+cp magic.env.example .env
+PUBLISH_S3=no ./magic-online.sh
+```
+
+Its demo path has already passed same-online-server relocated-bundle offline emulation. See `docs/ops/README.md` for its own workflow and constraints.
+
+Do not treat its optional S3 publication path as proven merely because the local proof passed; validate transfer behavior separately when that feature is needed.
+
 ## Optional S3 transfer/release proof
 
 S3 publication is **not required for every engineering test**.
@@ -136,7 +152,7 @@ AWS_PROFILE=dev \
   s3://bucket/prefix/bounded-test/
 ```
 
-The builder rejects a non-empty publication prefix by default.
+The canonical builder rejects a non-empty publication prefix by default.
 
 ## Real offline-server acceptance
 
