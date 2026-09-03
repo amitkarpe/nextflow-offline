@@ -197,21 +197,31 @@ mapfile -t plugins < <(
 )
 printf '%s\n' "${plugins[@]}" > "$BUNDLE_ROOT/manifests/plugins.txt"
 for plugin in "${plugins[@]}"; do
-  NXF_HOME="$PLUGIN_HOME" NXF_PLUGIN_AUTOINSTALL=false nf plugin install "$plugin"
+  (
+    cd "$BUNDLE_ROOT"
+    NXF_HOME="$PLUGIN_HOME" NXF_PLUGIN_AUTOINSTALL=false nf plugin install "$plugin"
+  )
 done
 
 export NXF_HOME="$PLUGIN_HOME"
 export NXF_OFFLINE=true
 export NXF_PLUGIN_AUTOINSTALL=false
-nf -version > "$BUNDLE_ROOT/manifests/nextflow.version.txt"
+(
+  cd "$BUNDLE_ROOT"
+  nf -version
+) > "$BUNDLE_ROOT/manifests/nextflow.version.txt"
 if command -v nf-core >/dev/null 2>&1; then
   nf-core --version > "$BUNDLE_ROOT/manifests/nf-core.version.txt"
 else
   printf '%s\n' 'not used (SOURCE_MODE=s3-cache)' > "$BUNDLE_ROOT/manifests/nf-core.version.txt"
 fi
-nf inspect "$BUNDLE_ROOT/workflow" -profile "$CONTAINER_PROFILE,offline_smoke" \
-  -c "$BUNDLE_ROOT/offline/offline_test.conf" -format json \
-  > "$BUNDLE_ROOT/manifests/inspect.json"
+(
+  cd "$BUNDLE_ROOT"
+  nf inspect "$BUNDLE_ROOT/workflow" -profile "$CONTAINER_PROFILE,offline_smoke" \
+    -c "$BUNDLE_ROOT/offline/offline_test.conf" \
+    --outdir "$BUNDLE_ROOT/offline/inspect-output" \
+    -format json
+) > "$BUNDLE_ROOT/manifests/inspect.json"
 jq -e '.processes | type == "array" and length > 0' \
   "$BUNDLE_ROOT/manifests/inspect.json" >/dev/null
 
