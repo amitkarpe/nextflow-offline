@@ -1,0 +1,8 @@
+--input
+data/samplesheet.csv
+--fasta
+data/refs/genome.fasta
+--gtf
+data/refs/genes_with_empty_tid.gtf
+--outdir
+results

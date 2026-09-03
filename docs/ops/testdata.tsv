@@ -1,0 +1,9 @@
+pipeline	revision	kind	source	destination
+demo	1.0.2	samplesheet	repo://examples/demo-samplesheet.csv	data/samplesheet.csv
+demo	1.0.2	fastq	https://raw.githubusercontent.com/nf-core/test-datasets/viralrecon/illumina/amplicon/sample1_R1.fastq.gz	data/reads/sample1_R1.fastq.gz
+demo	1.0.2	fastq	https://raw.githubusercontent.com/nf-core/test-datasets/viralrecon/illumina/amplicon/sample1_R2.fastq.gz	data/reads/sample1_R2.fastq.gz
+rnaseq	3.18.0	samplesheet	repo://examples/rnaseq-samplesheet.csv	data/samplesheet.csv
+rnaseq	3.18.0	fastq	s3://trust-team/nextflow-offline/data/rnaseq-tiny-20260624/tiny_R1.fastq.gz	data/reads/tiny_R1.fastq.gz
+rnaseq	3.18.0	fastq	s3://trust-team/nextflow-offline/data/rnaseq-tiny-20260624/tiny_R2.fastq.gz	data/reads/tiny_R2.fastq.gz
+rnaseq	3.18.0	fasta	s3://trust-team/nextflow-offline/data/rnaseq-tiny-20260624/genome.fasta	data/refs/genome.fasta
+rnaseq	3.18.0	gtf	s3://trust-team/nextflow-offline/data/rnaseq-tiny-20260624/genes_with_empty_tid.gtf	data/refs/genes_with_empty_tid.gtf
