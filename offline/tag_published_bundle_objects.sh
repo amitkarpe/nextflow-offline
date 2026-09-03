@@ -12,7 +12,6 @@ AWS_BIN="${AWS_BIN:-aws}"
 TAG_WORKERS="${TAG_WORKERS:-8}"
 PUBLISH_NAME="${PUBLISH_NAME:-issue-10-demo-bundle}"
 PUBLISH_VERSION="${PUBLISH_VERSION:-1.0.2}"
-PUBLISH_PHASE="${PUBLISH_PHASE:-issue-10}"
 PUBLISH_CREATED="${PUBLISH_CREATED:-$(date +%F)}"
 
 case "$PUBLISH_URI" in
@@ -50,7 +49,6 @@ tagging_json="$(jq -nc \
   --arg name "$PUBLISH_NAME" \
   --arg version "$PUBLISH_VERSION" \
   --arg ttl "$PUBLISH_TTL" \
-  --arg phase "$PUBLISH_PHASE" \
   '{TagSet: [
     {Key: "dev", Value: "amit"},
     {Key: "project", Value: "nextflow-offline"},
@@ -61,8 +59,7 @@ tagging_json="$(jq -nc \
     {Key: "Name", Value: $name},
     {Key: "version", Value: $version},
     {Key: "TTL", Value: $ttl},
-    {Key: "purpose", Value: "s3-publish-proof"},
-    {Key: "phase", Value: $phase}
+    {Key: "purpose", Value: "s3-publish-proof"}
   ]}')"
 
 inventory_file="$(mktemp "${TMPDIR:-/tmp}/nextflow-s3-tag-inventory.XXXXXX")"
