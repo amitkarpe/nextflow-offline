@@ -48,6 +48,7 @@ DOWNLOADED_WORKFLOW_DIR="$(dirname "$MAIN_NF")"
 if [[ "$DOWNLOADED_WORKFLOW_DIR" != "$WORKFLOW_DIR" ]]; then
   mv "$DOWNLOADED_WORKFLOW_DIR" "$WORKFLOW_DIR"
 fi
+mkdir -p "$BUNDLE_ROOT"/{containers,plugins,data/reads,data/refs,offline,manifests}
 [[ -f "$WORKFLOW_DIR/main.nf" ]] || { echo "workflow/main.nf not found" >&2; exit 1; }
 cp "$SCRIPT_DIR/params_offline.json" "$BUNDLE_ROOT/offline/params_offline.json"
 cp "$SCRIPT_DIR/offline_test.conf" "$BUNDLE_ROOT/offline/offline_test.conf"
