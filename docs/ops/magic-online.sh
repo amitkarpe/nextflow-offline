@@ -87,10 +87,13 @@ export NXF_HOME="$BUNDLE_ROOT/plugins/nextflow-home"
 export NXF_PLUGIN_AUTOINSTALL=true
 mkdir -p "$NXF_HOME"
 nf -version > "$BUNDLE_ROOT/manifests/nextflow.version.txt"
-nf inspect "$WORKFLOW_DIR" -profile "$INSPECT_PROFILE" \
-  -c "$BUNDLE_ROOT/offline/offline_test.conf" \
-  --outdir "$BUNDLE_ROOT/offline/inspect-output" \
-  -format json > "$BUNDLE_ROOT/manifests/inspect.json"
+(
+  cd "$BUNDLE_ROOT"
+  nf inspect "$WORKFLOW_DIR" -profile "$INSPECT_PROFILE" \
+    -c "$BUNDLE_ROOT/offline/offline_test.conf" \
+    --outdir "$BUNDLE_ROOT/offline/inspect-output" \
+    -format json
+) > "$BUNDLE_ROOT/manifests/inspect.json"
 jq -r '.processes[]?.container | select(type == "string" and length > 0)' "$BUNDLE_ROOT/manifests/inspect.json" \
   | sort -u > "$BUNDLE_ROOT/manifests/images.txt"
 [[ -s "$BUNDLE_ROOT/manifests/images.txt" ]] || { echo "empty image inventory" >&2; exit 1; }
