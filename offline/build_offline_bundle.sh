@@ -21,6 +21,8 @@ DATA_S3_PREFIX="${DATA_S3_PREFIX:-s3://trust-team/nextflow-offline/data/rnaseq-t
 BUNDLE_ROOT="${BUNDLE_ROOT:-$HOME/.cache/nextflow-offline/${PIPELINE##*/}-${REVISION}}"
 PUBLISH_S3="${PUBLISH_S3:-no}"
 S3_ROOT="${S3_ROOT:-}"
+PUBLISH_PREFIX="${PUBLISH_PREFIX:-}"
+PUBLISH_REQUIRE_EMPTY="${PUBLISH_REQUIRE_EMPTY:-yes}"
 LOAD_BUNDLE_IMAGES="${LOAD_BUNDLE_IMAGES:-yes}"
 NXF_VER="${NXF_VER:-25.10.4}"
 export NXF_VER
@@ -50,8 +52,15 @@ need nextflow
 }
 if [ "$PUBLISH_S3" = yes ]; then
   need aws
-  [ -n "$S3_ROOT" ] || { echo "S3_ROOT is required when PUBLISH_S3=yes" >&2; exit 1; }
+  [ -n "$PUBLISH_PREFIX" ] || [ -n "$S3_ROOT" ] || {
+    echo "PUBLISH_PREFIX or S3_ROOT is required when PUBLISH_S3=yes" >&2
+    exit 1
+  }
 fi
+case "$PUBLISH_REQUIRE_EMPTY" in
+  yes|no) ;;
+  *) echo "PUBLISH_REQUIRE_EMPTY must be yes or no" >&2; exit 1 ;;
+esac
 case "$LOAD_BUNDLE_IMAGES" in
   yes|no) ;;
   *) echo "LOAD_BUNDLE_IMAGES must be yes or no" >&2; exit 1 ;;
@@ -79,6 +88,20 @@ STAGE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/nextflow-offline.XXXXXX")"
 trap 'rm -rf "$STAGE_ROOT"' EXIT
 
 PIPELINE_NAME="${PIPELINE##*/}"
+PUBLISH_URI=""
+PUBLISH_BUCKET=""
+PUBLISH_KEY_PREFIX=""
+if [ "$PUBLISH_S3" = yes ]; then
+  PUBLISH_URI="${PUBLISH_PREFIX:-${S3_ROOT%/}/${PIPELINE_NAME}/${REVISION}/}"
+  PUBLISH_URI="${PUBLISH_URI%/}/"
+  publish_path="${PUBLISH_URI#s3://}"
+  PUBLISH_BUCKET="${publish_path%%/*}"
+  PUBLISH_KEY_PREFIX="${publish_path#*/}"
+  if [ "$publish_path" = "$PUBLISH_KEY_PREFIX" ] || [ -z "${PUBLISH_KEY_PREFIX%/}" ]; then
+    echo "PUBLISH_PREFIX must include a bucket and non-empty key prefix: $PUBLISH_URI" >&2
+    exit 1
+  fi
+fi
 WORKFLOW_SOURCE="$STAGE_ROOT/workflow"
 DATA_SOURCE="$STAGE_ROOT/data"
 IMAGE_SOURCE="$STAGE_ROOT/images"
@@ -227,6 +250,7 @@ revision=$REVISION
 nextflow_version=$NXF_VER
 source_mode=$SOURCE_MODE
 EOF
+[ -z "$PUBLISH_URI" ] || printf 'publish_uri=%s\n' "$PUBLISH_URI" >> "$BUNDLE_ROOT/manifests/release.env"
 
 SMOKE_OUT="$BUNDLE_ROOT/offline/smoke-output"
 SMOKE_WORK="$STAGE_ROOT/smoke-work"
@@ -275,7 +299,19 @@ EOF
     sort -z | xargs -0 sha256sum
 ) > "$BUNDLE_ROOT/manifests/files.sha256"
 if [ "$PUBLISH_S3" = yes ]; then
-  aws s3 sync "$BUNDLE_ROOT/" "${S3_ROOT%/}/${PIPELINE_NAME}/${REVISION}/" --only-show-errors
+  if [ "$PUBLISH_REQUIRE_EMPTY" = yes ]; then
+    existing_key_count="$(aws s3api list-objects-v2 \
+      --bucket "$PUBLISH_BUCKET" \
+      --prefix "$PUBLISH_KEY_PREFIX" \
+      --max-keys 1 \
+      --query 'KeyCount' \
+      --output text)"
+    if [ "$existing_key_count" != 0 ]; then
+      echo "refusing to publish to non-empty prefix: $PUBLISH_URI" >&2
+      exit 1
+    fi
+  fi
+  aws s3 sync "$BUNDLE_ROOT/" "$PUBLISH_URI" --only-show-errors
 fi
 
 echo "Bundle ready: $BUNDLE_ROOT"

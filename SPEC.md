@@ -36,9 +36,10 @@ and writes metadata/checksums. `SOURCE_MODE=public` retains the nf-core download
 path for a new pinned revision and stages the HTTP test samplesheet and FASTQ
 inputs locally before the smoke run.
 
-S3 publication is opt-in only. Set `PUBLISH_S3=yes` and an exact `S3_ROOT`;
-the builder syncs to `<S3_ROOT>/<pipeline-name>/<revision>/`. The default is
-`PUBLISH_S3=no`.
+S3 publication is opt-in only. Set `PUBLISH_S3=yes` and an exact empty
+`PUBLISH_PREFIX`; the builder syncs only to that prefix and rejects an existing
+object by default. `S3_ROOT` remains a compatibility fallback that derives
+`<S3_ROOT>/<pipeline-name>/<revision>/`. The default is `PUBLISH_S3=no`.
 
 ## Bundle contract
 
@@ -70,6 +71,8 @@ the builder syncs to `<S3_ROOT>/<pipeline-name>/<revision>/`. The default is
 - local Nextflow offline smoke validation exits zero;
 - generated bundle content stays outside Git;
 - optional S3 publication is explicit and its destination is recorded.
+- `offline/verify_published_bundle.sh <exact-s3-prefix>` performs a
+  non-destructive object inventory and README metadata readback.
 
 ## No-go and deferred work
 
