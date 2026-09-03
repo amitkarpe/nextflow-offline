@@ -12,7 +12,7 @@ need nextflow
 need podman
 need jq
 WORKFLOW_DIR="$BUNDLE_ROOT/workflow"
-PARAMS_FILE="$BUNDLE_ROOT/offline/params_offline.json"
+PARAMS_FILE="$BUNDLE_ROOT/offline/params_sarek_offline.json"
 CONFIG_FILE="$BUNDLE_ROOT/offline/offline_test.conf"
 [ -f "$WORKFLOW_DIR/main.nf" ] || { echo 'prepared workflow missing' >&2; exit 1; }
 [ -f "$INPUT_SHEET" ] || { echo "input sheet missing: $INPUT_SHEET" >&2; exit 1; }

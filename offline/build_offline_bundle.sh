@@ -163,18 +163,9 @@ Input source: $DATA_SOURCE_LABEL
 The FASTQ and reference files are pre-staged local assets; no runtime download is allowed.
 EOF
 
-cat > "$BUNDLE_ROOT/offline/params_offline.json" <<'EOF'
-{
-  "input": null,
-  "outdir": null,
-  "igenomes_ignore": true,
-  "validate_params": false,
-  "custom_config_base": null,
-  "custom_config_version": null,
-  "pipelines_testdata_base_path": null,
-  "modules_testdata_base_path": null
-}
-EOF
+DEMO_PARAMS_FILE="$REPO_ROOT/offline/params_demo_offline.json"
+[ -f "$DEMO_PARAMS_FILE" ] || { echo "demo params file not found: $DEMO_PARAMS_FILE" >&2; exit 1; }
+cp "$DEMO_PARAMS_FILE" "$BUNDLE_ROOT/offline/params_offline.json"
 cp "$REPO_ROOT/offline/offline_test.conf" "$BUNDLE_ROOT/offline/offline_test.conf"
 
 mapfile -t plugins < <(

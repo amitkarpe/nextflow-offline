@@ -64,6 +64,15 @@ Keep the offline profile's container registry prefix aligned with the
 `RepoTags` in the staged archives. Clearing the prefix can turn a fully
 qualified image into a different short name and make archive matching fail.
 
+Keep pipeline parameter files scope-specific. The demo builder consumes
+`params_demo_offline.json`; the deferred Sarek scripts consume
+`params_sarek_offline.json`, including Sarek's reference-selection settings.
+Do not let a demo smoke change overwrite the deferred Sarek contract.
+
+The historical `scrnaseq` Docker runner accepts both legacy `.tgz` and current
+`.tar` image archives. New Phase 1 proof remains Podman-only; this compatibility
+change does not make Docker part of the smoke gate.
+
 ## S3 wording
 
 S3 cache read means downloading existing approved assets for preparation.

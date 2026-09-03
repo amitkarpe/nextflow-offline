@@ -25,7 +25,7 @@ secrets may enter Git or the bundle.
 ```text
 offline/build_offline_bundle.sh
 offline/bundle.env
-offline/params_offline.json
+offline/params_demo_offline.json
 ```
 
 Run the builder from the online server with an empty `BUNDLE_ROOT` outside the
@@ -79,4 +79,5 @@ dependency, image export fails, or a new external service is required.
 Offline-server/EC2 proof, Sarek scale-up, ECR optimization, CodeBuild,
 CloudOS, multi-pipeline catalogues, and production Ops/SOP work are deferred.
 Existing `scrnaseq` scripts remain historical and are not changed by this
-Phase 1 path.
+Phase 1 path. The deferred Sarek scripts use
+`offline/params_sarek_offline.json`; do not reuse the demo parameter file.

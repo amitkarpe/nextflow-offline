@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 set -e # Exit immediately if a command exits with a non-zero status.
 set -u # Treat unset variables as an error when substituting.
 set -o pipefail # Return value of a pipeline is the value of the last command to exit with a non-zero status
@@ -11,7 +11,7 @@ ASSET_CACHE_BASE_DIR="${S3_MOUNT_POINT}/nextflow-offline-cache"
 ASSET_DIR="${ASSET_CACHE_BASE_DIR}/assets"
 
 # --- Image Configuration (Should align with fetch_and_save_images.sh) ---
-# Base directory where *image* .tgz files were saved
+# Base directory where legacy .tgz and current .tar image archives are saved
 IMAGE_CACHE_DIR="${S3_MOUNT_POINT}/pipe/images"
 
 # Derived directories/paths for assets
@@ -53,14 +53,15 @@ echo ">>> Loading Docker images from ${IMAGE_CACHE_DIR}..."
 IMAGES_LOADED=0
 IMAGES_FAILED=0
 shopt -s nullglob # Prevent loop from running if no files match
-for TGZ_FILE in "${IMAGE_CACHE_DIR}"/*.tgz; do
-    # nullglob ensures the loop body doesn't run if no .tgz files exist
-    echo "--- Loading image from: ${TGZ_FILE} ---"
-    if docker load < "${TGZ_FILE}"; then
-        echo "--- Successfully loaded ${TGZ_FILE} ---"
+IMAGE_ARCHIVES=("${IMAGE_CACHE_DIR}"/*.tar "${IMAGE_CACHE_DIR}"/*.tgz)
+for IMAGE_ARCHIVE in "${IMAGE_ARCHIVES[@]}"; do
+    # nullglob ensures the loop body does not run when neither format exists.
+    echo "--- Loading image from: ${IMAGE_ARCHIVE} ---"
+    if docker load < "${IMAGE_ARCHIVE}"; then
+        echo "--- Successfully loaded ${IMAGE_ARCHIVE} ---"
         IMAGES_LOADED=$((IMAGES_LOADED + 1))
     else
-        echo "--- ERROR loading ${TGZ_FILE} ---"
+        echo "--- ERROR loading ${IMAGE_ARCHIVE} ---"
         IMAGES_FAILED=$((IMAGES_FAILED + 1))
     fi
 done
@@ -72,13 +73,13 @@ if [ "${IMAGES_FAILED}" -gt 0 ]; then
     exit 1
 fi
 if [ "${IMAGES_LOADED}" -eq 0 ]; then
-    # Check if *any* .tgz files existed. If not, it might be okay if the pipeline needs no containers.
+    # No supported archives may be valid for a container-free pipeline.
     # If files existed but all failed to load, that's definitely an error (covered above).
-    if ! compgen -G "${IMAGE_CACHE_DIR}/*.tgz" > /dev/null; then
-        echo "Warning: No Docker image .tgz files found in ${IMAGE_CACHE_DIR}. Assuming pipeline does not require containers or they are already loaded."
+    if [ "${#IMAGE_ARCHIVES[@]}" -eq 0 ]; then
+        echo "Warning: No Docker image .tar or .tgz files found in ${IMAGE_CACHE_DIR}. Assuming pipeline does not require containers or they are already loaded."
     else
         # This case shouldn't be reached if IMAGES_FAILED check works, but added for robustness
-        echo "Warning: Found .tgz files but failed to load any. Pipeline might fail." >&2
+        echo "Warning: Found supported image archives but failed to load any. Pipeline might fail." >&2
     fi
     # Consider exiting based on requirements
     # exit 1
@@ -120,4 +121,4 @@ if [ ${RUN_EXIT_CODE} -eq 0 ]; then
 else
     echo "❌ ERROR: Nextflow pipeline failed with Exit Code ${RUN_EXIT_CODE}."
     exit ${RUN_EXIT_CODE}
-fi 
+fi
