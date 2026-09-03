@@ -86,6 +86,7 @@ done < "$TESTDATA_TSV"
 export NXF_HOME="$BUNDLE_ROOT/plugins/nextflow-home"
 export NXF_PLUGIN_AUTOINSTALL=true
 mkdir -p "$NXF_HOME"
+nf -version > "$BUNDLE_ROOT/manifests/nextflow.version.txt"
 nf inspect "$WORKFLOW_DIR" -profile "$INSPECT_PROFILE" \
   -c "$BUNDLE_ROOT/offline/offline_test.conf" \
   --outdir "$BUNDLE_ROOT/offline/inspect-output" \
