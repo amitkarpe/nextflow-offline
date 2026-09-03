@@ -4,64 +4,79 @@ Canonical repository: `amitkarpe/nextflow-offline`
 Canonical branch: `main`
 Implementation branch: `feature/issue-12-offline-consumer-proof`
 Owning Issue: https://github.com/amitkarpe/nextflow-offline/issues/12
+Owning Draft PR: https://github.com/amitkarpe/nextflow-offline/pull/14
 
 ## Goal
 
-Prove that the already-published `nf-core/demo` 1.0.2 bundle can be consumed on a separate **offline server** without any public runtime dependency.
+Build and validate the portable `nf-core/demo` 1.0.2 bundle on the **same online server**, then relocate it to a different fresh local path and run it with strict offline-emulation controls.
+
+This is the fast development validation loop. **Do not require S3 publication, S3 download, or a second offline server in this issue.**
 
 This is Phase 2 only. Do not start Sarek.
 
-## Phase 1 anchors already merged
+## Merged anchors
 
-- PR #6 — portable magic-bundle builder + local Podman offline smoke
-- PR #11 — bounded S3 publication/readback proof
-- PR #13 — bounded S3 preflight pagination hardening
-- Phase 1 summary — Issue #5 closed completed
-
-Published proof prefix:
-
-```text
-s3://trust-team/nextflow-offline/bundles/demo-1.0.2/issue-10-publish-proof-20260903-170603/
-```
-
-Authorized AWS profile for the proof:
-
-```text
-AWS_PROFILE=dev
-```
+- PR #6 — portable bundle builder + Podman offline smoke
+- PR #11 — one bounded S3 publication/readback proof
+- PR #13 — bounded S3 preflight hardening
+- Issue #5 — Phase 1 completed
 
 ## Exactly one objective
 
-On one authorized non-production **offline server**:
+On the same online server:
 
-1. sync the exact published bundle from S3 to a fresh local directory;
-2. verify the required bundle paths;
-3. optionally verify `manifests/files.sha256` if this remains KISS;
-4. load only the bundled container archives into Podman;
-5. recover `workflow/bin/*` executable bits if needed;
-6. use the bundle-local Nextflow plugin/cache state;
-7. run `nf-core/demo` 1.0.2 from the bundle root with explicit offline controls;
-8. capture sanitized evidence showing the transferred bundle completes without public runtime downloads.
+1. build a fresh `nf-core/demo` 1.0.2 bundle using the canonical `offline/build_offline_bundle.sh`;
+2. explicitly keep `PUBLISH_S3=no`;
+3. relocate/copy the completed bundle to a different fresh absolute path;
+4. validate required bundle paths;
+5. load the relocated bundle's container archives into Podman;
+6. recover `workflow/bin/*` executable bits if required;
+7. use only the relocated bundle's workflow, configs, data, refs and plugin/cache state;
+8. run from the relocated bundle root with strict offline controls;
+9. capture compact sanitized evidence of success.
 
-## Preferred implementation shape
+## Preferred implementation
 
-Keep this small. Reuse the merged bundle contract. Preferred new helper:
-
-```text
-offline/consume_published_bundle.sh
-```
-
-The helper should be parameterized through environment variables, with high-fidelity defaults such as:
+Keep this KISS. Reuse the merged builder and existing `offline_smoke` profile. Add only the smallest helper if useful, for example:
 
 ```text
-AWS_PROFILE=dev
-SOURCE_PREFIX=s3://trust-team/nextflow-offline/bundles/demo-1.0.2/issue-10-publish-proof-20260903-170603/
-BUNDLE_ROOT=<fresh local path>
-PIPELINE=nf-core/demo
-REVISION=1.0.2
+offline/test_bundle_offline_local.sh
 ```
 
-Do not add YAML or another framework.
+A preferred flow is:
+
+```bash
+BUILD_ROOT=/tmp/nextflow-demo-build
+TEST_ROOT=/tmp/nextflow-demo-offline-test
+
+PUBLISH_S3=no BUNDLE_ROOT="$BUILD_ROOT" \
+  /usr/bin/bash offline/build_offline_bundle.sh
+
+cp -a "$BUILD_ROOT" "$TEST_ROOT"
+cd "$TEST_ROOT"
+
+for image in containers/*.tar; do
+  [ -f "$image" ] || continue
+  podman load -i "$image"
+done
+
+chmod +x -c workflow/bin/* 2>/dev/null || true
+
+export NXF_HOME="$PWD/plugins/nextflow-home"
+export NXF_OFFLINE=true
+export NXF_PLUGIN_AUTOINSTALL=false
+
+nextflow run "$PWD/workflow" \
+  -profile podman,offline_smoke \
+  -params-file "$PWD/offline/params_offline.json" \
+  -c "$PWD/offline/offline_test.conf" \
+  --input data/reads/samplesheet.csv \
+  --outdir ./results \
+  -work-dir ./work \
+  -offline
+```
+
+Codex may improve exact mechanics after inspecting current `main`, but must not change the architecture silently.
 
 ## Required runtime contract
 
@@ -76,115 +91,92 @@ custom_config_version=null
 pipelines_testdata_base_path=null
 ```
 
-Runtime assumptions:
+Also preserve:
 
 - Podman only;
 - local executor;
-- explicit `nextflow ... -offline`;
+- explicit Nextflow `-offline`;
 - bundle-local `NXF_HOME`;
 - bundled workflow/config/data/refs/plugins only;
-- `podman load` from `containers/*.tar`;
-- task `--network none` where already supplied by the merged `offline_smoke` profile.
-
-## KISS consumer flow
-
-```text
-aws s3 sync <SOURCE_PREFIX> <BUNDLE_ROOT>/
-  -> required path checks
-  -> optional sha256sum -c manifests/files.sha256
-  -> podman load containers/*.tar
-  -> chmod +x -c workflow/bin/* if present
-  -> cd <BUNDLE_ROOT>
-  -> NXF_OFFLINE=true
-  -> NXF_PLUGIN_AUTOINSTALL=false
-  -> NXF_HOME=$PWD/plugins/nextflow-home
-  -> nextflow run $PWD/workflow ... -offline
-```
-
-The local destination must be a different absolute path from the online-server build location so portability is actually tested.
+- `podman load` from bundled archives;
+- task `--network none` through the existing `offline_smoke` profile;
+- no Docker;
+- no S3 publication/download for the normal proof.
 
 ## Acceptance criteria
 
-### Transfer
-
-- [ ] exact Phase 1 S3 proof prefix is used;
-- [ ] S3 sync exits `0`;
-- [ ] local destination is fresh and relocates the bundle;
-- [ ] `workflow/`, `containers/`, `plugins/`, `data/`, `offline/`, `manifests/`, and `README.txt` are present;
-- [ ] S3 objects are not modified or deleted.
-
-### Runtime
-
-- [ ] all required container archives load with Podman;
-- [ ] no public registry pull is needed;
-- [ ] bundle-local plugin/cache state is used;
-- [ ] `NXF_OFFLINE=true` is effective;
-- [ ] `NXF_PLUGIN_AUTOINSTALL=false` is effective;
-- [ ] explicit `-offline` is present;
+- [ ] fresh demo bundle build exits `0`;
+- [ ] `PUBLISH_S3=no`;
+- [ ] relocated test path differs from build path;
+- [ ] `workflow/`, `containers/`, `plugins/`, `data/`, `offline/`, `manifests/`, `README.txt` are present;
+- [ ] all required archives load with Podman;
+- [ ] bundle-local `NXF_HOME` is used;
+- [ ] `NXF_OFFLINE=true`;
+- [ ] `NXF_PLUGIN_AUTOINSTALL=false`;
+- [ ] explicit `-offline`;
+- [ ] Podman tasks retain `--network none`;
+- [ ] FASTQC, SEQTK_TRIM and MULTIQC (or equivalent pinned demo stages) complete;
 - [ ] pipeline exits `0`;
-- [ ] expected demo stages complete, including FASTQC, SEQTK_TRIM, and MULTIQC for the pinned revision;
-- [ ] expected output is produced from the transferred bundle.
+- [ ] no S3 publication/download or separate offline server is needed to claim Issue #12 success.
 
-### Offline boundary
+## What this proves / does not prove
 
-If the proof uses EC2, record sanitized evidence that:
+This proves a fast, repeatable **offline-emulation** validation on the online server and catches bundle portability, plugin, container and path errors.
 
-- approved private S3 access succeeds;
-- no public IP/general public runtime path is intended;
-- GitHub, quay.io, and Docker Hub are not required by the successful run.
-
-Do not treat a failed `curl` alone as proof. The pipeline itself must complete from the bundle.
+It does **not** prove the host has physically no internet route. A real offline-server/air-gapped test remains a later release acceptance gate.
 
 ## No-go gates
 
 Stop and report in this existing PR if:
 
-1. the bundle requires a public runtime download;
-2. a required plugin is absent from the bundle;
+1. the relocated bundle requires a public runtime download;
+2. a required plugin is absent;
 3. a required image cannot be loaded from the bundle archives;
-4. any path still depends on the original online-server build location;
+4. any path still depends on the original build location;
 5. Docker is required instead of Podman;
 6. the bundle contract must materially change;
-7. broader AWS/network/IAM mutation is required beyond the explicitly authorized offline-server test.
+7. S3/offline-server/AWS infrastructure work becomes required merely to pass this fast validation.
 
-Do not create a replacement PR or silently change architecture.
+Do not create a replacement Issue, branch or PR.
 
 ## Explicitly out of scope
 
 - Sarek;
-- ECR/ACR/Nexus publication;
+- S3 publish/download proof in this milestone;
+- separate offline server / EC2 proof;
+- ECR/ACR/Nexus;
+- Docker;
 - CodeBuild/CodePipeline;
 - CloudOS;
 - Terraform/CDK/CloudFormation;
-- Docker smoke;
 - multi-pipeline framework;
 - production/clinical data;
 - general Ops/SOP work.
 
 ## Evidence format
 
-Finish with one truthful terminal state: `SUCCESS`, `PARTIAL`, `BLOCKED`, `FAILED`, or `UNKNOWN_PENDING`.
+Finish with `SUCCESS`, `PARTIAL`, `BLOCKED`, `FAILED`, or `UNKNOWN_PENDING`.
 
 Recommended compact evidence:
 
 ```text
 PIPELINE=nf-core/demo
 REVISION=1.0.2
-AWS_PROFILE=dev
-SOURCE_PREFIX=s3://trust-team/nextflow-offline/bundles/demo-1.0.2/issue-10-publish-proof-20260903-170603/
-S3_PULL_RC=0
+BUILD_RC=0
+PUBLISH_S3=no
+BUILD_ROOT=<sanitized temp path>
+TEST_ROOT=<different sanitized temp path>
 REQUIRED_BUNDLE_PATHS=PASS
-CHECKSUMS=PASS|SKIPPED
-PODMAN_ARCHIVES_LOADED=3
+PODMAN_ARCHIVES_LOADED=<count>
 NXF_OFFLINE=true
 NXF_PLUGIN_AUTOINSTALL=false
+PODMAN_NETWORK=none
 PIPELINE_RC=0
-PUBLIC_RUNTIME_DOWNLOADS=NONE_OBSERVED
 RESULT=SUCCESS
 ```
 
-Never commit credentials, account IDs, ARNs, private endpoint identifiers, IPs, customer/clinical data, or raw cloud payloads.
+Never commit credentials, account IDs, ARNs, private endpoints, IPs, customer/clinical data or raw cloud payloads.
 
 ## Codex operating instruction
 
-Work only inside this existing branch / Draft PR for Issue #12. Preserve unrelated work. If implementation needs an architectural deviation, report it in the PR and stop for ChatGPT/Amit review instead of creating another Issue/branch/PR.
+Work only inside this existing branch / Draft PR #14 for Issue #12. Preserve unrelated work. If an architectural deviation is required, report it in PR #14 and stop for ChatGPT/Amit review.
