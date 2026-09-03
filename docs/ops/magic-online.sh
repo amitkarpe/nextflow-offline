@@ -42,12 +42,15 @@ nf-core pipelines download "$PIPELINE_REF" -r "$REVISION" \
   --download-configuration yes --force
 
 WORKFLOW_DIR="$BUNDLE_ROOT/workflow"
-MAIN_NF="$(find "$BUNDLE_ROOT" -type f -name main.nf -print -quit)"
-[[ -n "$MAIN_NF" ]] || { echo "downloaded workflow has no main.nf" >&2; exit 1; }
-DOWNLOADED_WORKFLOW_DIR="$(dirname "$MAIN_NF")"
-if [[ "$DOWNLOADED_WORKFLOW_DIR" != "$WORKFLOW_DIR" ]]; then
-  mv "$DOWNLOADED_WORKFLOW_DIR" "$WORKFLOW_DIR"
-fi
+DOWNLOADED_WORKFLOW_DIR="$BUNDLE_ROOT/${REVISION//./_}"
+[[ -f "$DOWNLOADED_WORKFLOW_DIR/main.nf" ]] || {
+  echo "downloaded workflow/main.nf not found: $DOWNLOADED_WORKFLOW_DIR" >&2
+  exit 1
+}
+# nf-core may also download a central-config `workflow/` directory. It is not
+# the selected pipeline, so replace it with the pinned versioned pipeline.
+[[ ! -e "$WORKFLOW_DIR" ]] || rm -rf "$WORKFLOW_DIR"
+mv "$DOWNLOADED_WORKFLOW_DIR" "$WORKFLOW_DIR"
 mkdir -p "$BUNDLE_ROOT"/{containers,plugins,data/reads,data/refs,offline,manifests}
 [[ -f "$WORKFLOW_DIR/main.nf" ]] || { echo "workflow/main.nf not found" >&2; exit 1; }
 cp "$SCRIPT_DIR/params_offline.json" "$BUNDLE_ROOT/offline/params_offline.json"
