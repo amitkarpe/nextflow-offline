@@ -1,0 +1,3 @@
+pipeline	revision	inspect_profile	run_profile	run_args_file
+demo	1.0.2	test,podman	podman	examples/demo.run.args
+rnaseq	3.18.0	test,podman	podman	examples/rnaseq.run.args

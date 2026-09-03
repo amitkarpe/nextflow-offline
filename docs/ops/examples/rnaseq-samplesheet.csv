@@ -1,0 +1,2 @@
+sample,fastq_1,fastq_2,strandedness
+tiny,data/reads/tiny_R1.fastq.gz,data/reads/tiny_R2.fastq.gz,auto
