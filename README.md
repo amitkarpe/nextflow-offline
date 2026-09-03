@@ -1,91 +1,170 @@
 # Nextflow offline bundle demo
 
-This repository contains a small Phase 1 “magic script” for preparing one
-portable offline bundle. It defaults to the existing private S3 cache for
-`nf-core/demo` revision `1.0.2`, with the existing `rnaseq-tiny-20260624`
-fixture and Podman image archives.
+This repository demonstrates a KISS path for preparing and validating portable Nextflow offline bundles.
 
-The two environments are deliberately separate:
+The default proof target is `nf-core/demo` revision `1.0.2` with Podman. Heavy workflow assets, data, plugins/cache, and container archives stay outside Git.
 
-- **online server:** downloads the pinned workflow, configs, plugins, input
-  data, and container images;
-- **offline server:** receives the finished bundle, loads local image archives,
-  and runs Nextflow with `-offline`.
+## Current project direction
+
+Use progressive validation instead of repeating the most expensive proof on every change:
+
+```text
+Level 0  static checks
+   ->
+Level 1  same-online-server offline emulation  [default fast loop]
+   ->
+Level 2  bounded S3 publish/readback           [occasional transfer proof]
+   ->
+Level 3  real offline-server execution         [acceptance gate]
+   ->
+Level 4  pipeline scale-up: rnaseq/Sarek/etc.
+```
+
+See `docs/validation-strategy.md` for what each level proves.
+
+Current canonical implementation milestone:
+
+- Issue #12 / PR #14 — fast same-**online server** relocated-bundle offline-emulation proof.
+
+Separate experimental lane:
+
+- Issue #7 / PR #8 — standalone colleague-facing `docs/ops/**` Magic Script validation. It is not part of the canonical `offline/` path until separately tested and reviewed.
+
+Sarek is a later scale-up milestone, not the immediate default task.
+
+## Terminology
+
+- **online server** — prepares assets and may access approved public/private sources;
+- **offline server** — consumes pre-staged assets without public internet dependency;
+- **offline emulation** — runs a relocated bundle on the same online server with strict offline controls.
+
+Offline emulation is useful for fast engineering validation, but it does **not** prove that the host itself has no internet route.
 
 ## Build on the online server
 
-Prerequisites: Bash, Nextflow, `jq`, Podman (or Docker), AWS CLI with the
-approved `dev` profile, and access to the private S3 prefixes during
-preparation. Choose an empty output directory outside Git.
+Prerequisites for the current canonical path: Bash, Nextflow, `jq`, Podman, AWS CLI when using the private S3 cache, and access to the selected preparation sources.
+
+Choose an empty bundle directory outside Git:
 
 ```bash
-cd /path/to/nextflow-offline-demo
-BUNDLE_ROOT=/path/to/bundles/demo-1.0.2 \
+cd /path/to/nextflow-offline
+
+PUBLISH_S3=no \
+BUNDLE_ROOT=/tmp/nextflow-demo-build \
   /usr/bin/bash offline/build_offline_bundle.sh
 ```
 
-The default script reads the pinned workflow and image archives from the
-existing S3 cache, copies the selected tiny FASTQ/reference fixture, installs
-the required Nextflow plugin in the bundle, loads the bundle image archives
-into Podman, performs a local offline smoke run, and writes
-`manifests/files.sha256`. No public image pull is needed. Set
-`LOAD_BUNDLE_IMAGES=no` only when intentionally skipping the bundle-load proof.
+The default `SOURCE_MODE=s3-cache` reads the pinned demo workflow/image cache and tiny approved fixture, stages bundle-local plugin/cache state, loads bundled image archives, runs the repo-owned Podman offline smoke, and writes manifests/checksums.
 
-Configuration defaults can be overridden in `offline/bundle.env` or the
-environment:
+A `SOURCE_MODE=public` preparation fallback exists for a new pinned revision. Any public test data discovered during preparation must be staged locally before runtime validation.
 
-```bash
-PIPELINE=nf-core/demo REVISION=1.0.2 PROFILE=podman \
-  SOURCE_MODE=s3-cache DATA_S3_PREFIX=s3://trust-team/nextflow-offline/data/rnaseq-tiny-20260624 \
-  CONTAINER_ENGINE=podman BUNDLE_ROOT=/path/to/empty/bundle \
-  /usr/bin/bash offline/build_offline_bundle.sh
+## Fast validation: same online server
+
+This is the preferred developer/PR loop.
+
+Build with:
+
+```text
+PUBLISH_S3=no
 ```
 
-To prepare a new public revision instead, set `SOURCE_MODE=public` and use an
-empty bundle path. The builder stages the HTTP test samplesheet from the
-downloaded pipeline's `conf/test.config` and its FASTQ files into the bundle
-before the smoke run. That path is slower because it pulls every image.
+Then relocate/copy the complete bundle to a different fresh local path and run only from that relocated copy.
 
-S3 publication is disabled by default. For a bounded proof, use an exact empty
-test prefix. The builder rejects a non-empty prefix unless
-`PUBLISH_REQUIRE_EMPTY=no` is explicitly set:
+Required runtime controls:
 
 ```bash
-AWS_PROFILE=dev PUBLISH_S3=yes \
-  PUBLISH_PREFIX=s3://bucket/prefix/issue-10-test/ \
-  BUNDLE_ROOT=/path/to/empty/bundle \
-  /usr/bin/bash offline/build_offline_bundle.sh
-
-AWS_PROFILE=dev /usr/bin/bash offline/verify_published_bundle.sh \
-  s3://bucket/prefix/issue-10-test/
+export NXF_HOME="$PWD/plugins/nextflow-home"
+export NXF_OFFLINE=true
+export NXF_PLUGIN_AUTOINSTALL=false
 ```
 
-## Consume on the offline server
-
-Transfer the complete bundle directory, then load every archive:
+Load bundled archives:
 
 ```bash
-cd /path/to/bundle
 for image in containers/*.tar containers/*.tgz; do
   [ -f "$image" ] || continue
   podman load -i "$image"
 done
 ```
 
-Run using only local bundle assets:
+If executable bits were lost during a transfer/copy path:
 
 ```bash
-NXF_VER=25.10.4 NXF_OFFLINE=true NXF_PLUGIN_AUTOINSTALL=false \
-  NXF_HOME="$PWD/plugins/nextflow-home" \
-  nextflow run "$PWD/workflow" -profile podman,offline_smoke \
-  -params-file "$PWD/offline/params_offline.json" \
-  -c "$PWD/offline/offline_test.conf" \
-  --input "$PWD/data/reads/samplesheet.csv" \
-  --outdir "$PWD/results" -work-dir "$PWD/work" -offline -resume
+chmod +x -c workflow/bin/* 2>/dev/null || true
 ```
 
-The fast path is Podman-only. Docker support remains an unvalidated future
-option and is not part of this smoke proof.
+Run from the relocated bundle root:
 
-The existing `scrnaseq` scripts are preserved as historical examples. Sarek
-is a later phase and is not claimed as proven by this demo.
+```bash
+NXF_VER=25.10.4 \
+NXF_OFFLINE=true \
+NXF_PLUGIN_AUTOINSTALL=false \
+NXF_HOME="$PWD/plugins/nextflow-home" \
+  nextflow run "$PWD/workflow" \
+  -profile podman,offline_smoke \
+  -params-file "$PWD/offline/params_offline.json" \
+  -c "$PWD/offline/offline_test.conf" \
+  --input data/reads/samplesheet.csv \
+  --outdir ./results \
+  -work-dir ./work \
+  -offline
+```
+
+The `offline_smoke` profile uses the local executor and Podman task network isolation. The fast proof should use only bundled workflow/config/data/refs/plugins/images.
+
+`nextflow -offline` is one control in this proof; by itself it is not evidence of an air-gapped host.
+
+## Optional S3 transfer/release proof
+
+S3 publication is **not required for every engineering test**.
+
+Use it only when the task owns a transfer/release proof:
+
+```bash
+AWS_PROFILE=dev \
+PUBLISH_S3=yes \
+PUBLISH_PREFIX=s3://bucket/prefix/bounded-test/ \
+BUNDLE_ROOT=/path/to/empty/bundle \
+  /usr/bin/bash offline/build_offline_bundle.sh
+```
+
+Read back the published structure without modifying it:
+
+```bash
+AWS_PROFILE=dev \
+  /usr/bin/bash offline/verify_published_bundle.sh \
+  s3://bucket/prefix/bounded-test/
+```
+
+The builder rejects a non-empty publication prefix by default.
+
+## Real offline-server acceptance
+
+A later acceptance gate may transfer the prepared bundle to a real **offline server** through an approved path and repeat the run there.
+
+That gate proves something stronger than Level 1: the environment itself has no public runtime dependency. Do not claim this from flags or failed network probes alone; the actual pipeline must complete from the prepared assets.
+
+## Bundle contract
+
+```text
+<bundle>/
+  workflow/
+  configs/                  # when supplied
+  containers/
+  plugins/nextflow-home/
+  data/reads/
+  data/refs/
+  offline/
+  manifests/
+  README.txt
+```
+
+The core contract is that moving this complete directory must not require the original online-server absolute path.
+
+## Later pipeline scale-up
+
+After the validation/bundle contract is stable, apply the same pattern to pipelines such as rnaseq and Sarek.
+
+Do not create a separate Sarek architecture unless a real reviewed blocker proves the shared bundle contract is insufficient.
+
+The existing `scrnaseq` scripts are preserved as historical examples. Docker support remains outside the current fast proof.
