@@ -64,9 +64,11 @@ S3_ROOT=s3://trust-team/nextflow-offline
 PIPELINE=demo
 REVISION=1.0.2
 IMAGE_MODE=archive
+PUBLISH_S3=no
 ```
 
-The default target is deliberately non-destructive:
+S3 publication is disabled by default. Set `PUBLISH_S3=yes` only for an
+explicitly approved destination:
 
 ```text
 s3://trust-team/nextflow-offline/bundles/demo-1.0.2/magic-v1/

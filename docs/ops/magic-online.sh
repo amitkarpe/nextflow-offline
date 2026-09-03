@@ -14,7 +14,7 @@ IMAGE_MODE="${IMAGE_MODE:-archive}"
 IMAGE_DEST_REGISTRY="${IMAGE_DEST_REGISTRY:-}"
 IMAGE_DEST_PREFIX="${IMAGE_DEST_PREFIX:-nextflow-offline}"
 BUNDLE_CHANNEL="${BUNDLE_CHANNEL:-magic-v1}"
-PUBLISH_S3="${PUBLISH_S3:-yes}"
+PUBLISH_S3="${PUBLISH_S3:-no}"
 PIPELINES_TSV="${PIPELINES_TSV:-$SCRIPT_DIR/pipelines.tsv}"
 TESTDATA_TSV="${TESTDATA_TSV:-$SCRIPT_DIR/testdata.tsv}"
 
@@ -42,6 +42,12 @@ nf-core pipelines download "$PIPELINE_REF" -r "$REVISION" \
   --download-configuration --force
 
 WORKFLOW_DIR="$BUNDLE_ROOT/workflow"
+MAIN_NF="$(find "$BUNDLE_ROOT" -type f -name main.nf -print -quit)"
+[[ -n "$MAIN_NF" ]] || { echo "downloaded workflow has no main.nf" >&2; exit 1; }
+DOWNLOADED_WORKFLOW_DIR="$(dirname "$MAIN_NF")"
+if [[ "$DOWNLOADED_WORKFLOW_DIR" != "$WORKFLOW_DIR" ]]; then
+  mv "$DOWNLOADED_WORKFLOW_DIR" "$WORKFLOW_DIR"
+fi
 [[ -f "$WORKFLOW_DIR/main.nf" ]] || { echo "workflow/main.nf not found" >&2; exit 1; }
 cp "$SCRIPT_DIR/params_offline.json" "$BUNDLE_ROOT/offline/params_offline.json"
 cp "$SCRIPT_DIR/offline_test.conf" "$BUNDLE_ROOT/offline/offline_test.conf"

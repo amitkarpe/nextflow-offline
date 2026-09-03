@@ -25,10 +25,18 @@ if [[ "$SKIP_S3_PULL" != yes ]]; then
 fi
 "$SCRIPT_DIR/validate-bundle.sh" "$BUNDLE_ROOT"
 
+PODMAN_ARCHIVES_LOADED=0
 while IFS=$'\t' read -r source mode artifact; do
   [[ "$source" == source || -z "$source" ]] && continue
-  [[ "$mode" == archive ]] && podman load -i "$BUNDLE_ROOT/$artifact"
+  [[ "$mode" == archive ]] || continue
+  podman load -i "$BUNDLE_ROOT/$artifact"
+  podman image exists "$source" || {
+    echo "loaded archive did not preserve image reference: $source" >&2
+    exit 1
+  }
+  PODMAN_ARCHIVES_LOADED=$((PODMAN_ARCHIVES_LOADED + 1))
 done < "$BUNDLE_ROOT/manifests/images.tsv"
+printf 'PODMAN_ARCHIVES_LOADED=%s\n' "$PODMAN_ARCHIVES_LOADED"
 
 if [[ -d "$BUNDLE_ROOT/workflow/bin" ]]; then chmod +x -c "$BUNDLE_ROOT/workflow/bin/"* 2>/dev/null || true; fi
 export NXF_HOME="$BUNDLE_ROOT/plugins/nextflow-home"
