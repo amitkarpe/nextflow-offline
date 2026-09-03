@@ -18,6 +18,17 @@ S3_BUNDLE_URI="${S3_BUNDLE_URI:-${S3_ROOT%/}/bundles/${BUNDLE_NAME}/${BUNDLE_CHA
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing command: $1" >&2; exit 1; }; }
 for tool in podman nextflow sha256sum; do need "$tool"; done
+
+NEXTFLOW_BIN="$(command -v nextflow)"
+if grep -q '^export NXF_HOME=' "$NEXTFLOW_BIN" 2>/dev/null; then
+  tools_root="$(sed -n 's/^export NEXTFLOW_TOOLS_ROOT=//p' "$NEXTFLOW_BIN")"
+  if [[ -n "$tools_root" && -x "$tools_root/nextflow/nextflow" ]]; then
+    export JAVA_HOME="$tools_root/java"
+    export PATH="$JAVA_HOME/bin:$PATH"
+    NEXTFLOW_BIN="$tools_root/nextflow/nextflow"
+  fi
+fi
+nf() { "$NEXTFLOW_BIN" "$@"; }
 mkdir -p "$BUNDLE_ROOT"
 if [[ "$SKIP_S3_PULL" != yes ]]; then
   need aws
@@ -51,5 +62,6 @@ fi
 mapfile -t RUN_ARGS < "$BUNDLE_ROOT/offline/run.args"
 RUN_PROFILE="$(cat "$BUNDLE_ROOT/offline/run.profile")"
 cd "$BUNDLE_ROOT"
-nextflow run workflow -profile "$RUN_PROFILE" -params-file offline/params_offline.json -c offline/offline_test.conf -offline "${RUN_ARGS[@]}"
+nf run workflow -profile "$RUN_PROFILE" -params-file offline/params_offline.json -c offline/offline_test.conf \
+  -work-dir work -offline "${RUN_ARGS[@]}"
 echo "SUCCESS: offline pipeline completed"

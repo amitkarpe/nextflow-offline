@@ -26,6 +26,17 @@ need() { command -v "$1" >/dev/null 2>&1 || { echo "missing command: $1" >&2; ex
 for tool in nf-core nextflow jq curl sha256sum skopeo; do need "$tool"; done
 [[ "$PUBLISH_S3" == yes ]] && need aws
 
+NEXTFLOW_BIN="$(command -v nextflow)"
+if grep -q '^export NXF_HOME=' "$NEXTFLOW_BIN" 2>/dev/null; then
+  tools_root="$(sed -n 's/^export NEXTFLOW_TOOLS_ROOT=//p' "$NEXTFLOW_BIN")"
+  if [[ -n "$tools_root" && -x "$tools_root/nextflow/nextflow" ]]; then
+    export JAVA_HOME="$tools_root/java"
+    export PATH="$JAVA_HOME/bin:$PATH"
+    NEXTFLOW_BIN="$tools_root/nextflow/nextflow"
+  fi
+fi
+nf() { "$NEXTFLOW_BIN" "$@"; }
+
 case "$BUNDLE_ROOT" in "$WORK_ROOT"/*) ;; *) echo "BUNDLE_ROOT must stay below WORK_ROOT" >&2; exit 1 ;; esac
 
 row="$(awk -F '\t' -v p="$PIPELINE" -v r="$REVISION" 'NR>1 && $1==p && $2==r {print; exit}' "$PIPELINES_TSV")"
@@ -75,7 +86,7 @@ done < "$TESTDATA_TSV"
 export NXF_HOME="$BUNDLE_ROOT/plugins/nextflow-home"
 export NXF_PLUGIN_AUTOINSTALL=true
 mkdir -p "$NXF_HOME"
-nextflow inspect "$WORKFLOW_DIR" -profile "$INSPECT_PROFILE" \
+nf inspect "$WORKFLOW_DIR" -profile "$INSPECT_PROFILE" \
   -c "$BUNDLE_ROOT/offline/offline_test.conf" \
   --outdir "$BUNDLE_ROOT/offline/inspect-output" \
   -format json > "$BUNDLE_ROOT/manifests/inspect.json"
