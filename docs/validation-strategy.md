@@ -78,6 +78,22 @@ nextflow -offline
 
 was used. That flag is only one part of the runtime contract. Level 1 proves self-contained bundle behavior under enforced offline controls, not physical network isolation of the host.
 
+### Current Level 1 status
+
+The standalone `docs/ops/**` Magic Script completed a successful `nf-core/demo` 1.0.2 Level 1 proof in PR #8:
+
+- relocated bundle path;
+- 3 portable image archives loaded into isolated Podman storage;
+- image names/tags preserved;
+- bundle-local Nextflow state;
+- `NXF_OFFLINE=true`;
+- `NXF_PLUGIN_AUTOINSTALL=false`;
+- explicit `-offline`;
+- Podman task `--network none`;
+- FASTQC, SEQTK_TRIM, and MULTIQC completed.
+
+The current canonical implementation milestone remains Issue #12 / PR #14 for the merged `offline/**` implementation.
+
 ## Level 2 — bounded S3 transfer/release proof
 
 S3 publication is opt-in and should not be repeated for ordinary code/doc iterations.
@@ -98,7 +114,9 @@ Expected evidence:
 - release metadata records the exact destination;
 - no credentials/private payloads are committed.
 
-The repository already completed one Phase 1 demo S3 publish/readback proof. Future repetition should have a specific reason.
+The repository already completed one Phase 1 demo S3 publish/readback proof for the canonical builder. Future repetition should have a specific reason.
+
+The PR #8 `docs/ops/**` Level 1 proof did not exercise S3 publication. Do not treat its optional publish path as Level 2-proven until separately tested.
 
 ## Level 3 — real offline-server acceptance gate
 
@@ -133,15 +151,15 @@ For rnaseq/Sarek, add only pipeline-specific requirements proven necessary, for 
 
 Do not replace the shared bundle contract merely because the pipeline is larger.
 
-## Current lanes
+## Current paths
 
 ### Canonical implementation
 
-Issue #12 / PR #14 owns the current Level 1 fast same-online-server relocated-bundle proof for the merged `offline/` implementation.
+Issue #12 / PR #14 owns the current Level 1 fast same-online-server relocated-bundle proof for the merged `offline/**` implementation.
 
-### Standalone colleague-facing experiment
+### Standalone colleague-facing handoff
 
-Issue #7 / PR #8 owns `docs/ops/**` and validates a separate standalone Magic Script handoff. Keep that work isolated until its runtime evidence is reviewed.
+`docs/ops/**` is merged through PR #8 after its successful demo Level 1 proof. It remains a separate standalone handoff rather than a replacement for `offline/**`.
 
 ### Documentation direction
 
