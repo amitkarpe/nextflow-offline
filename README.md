@@ -46,14 +46,18 @@ empty bundle path. The builder stages the HTTP test samplesheet from the
 downloaded pipeline's `conf/test.config` and its FASTQ files into the bundle
 before the smoke run. That path is slower because it pulls every image.
 
-S3 publication is disabled by default. If an exact destination is approved,
-set it explicitly, for example:
+S3 publication is disabled by default. For a bounded proof, use an exact empty
+test prefix. The builder rejects a non-empty prefix unless
+`PUBLISH_REQUIRE_EMPTY=no` is explicitly set:
 
 ```bash
 AWS_PROFILE=dev PUBLISH_S3=yes \
-  S3_ROOT=s3://bucket/prefix \
+  PUBLISH_PREFIX=s3://bucket/prefix/issue-10-test/ \
   BUNDLE_ROOT=/path/to/empty/bundle \
   /usr/bin/bash offline/build_offline_bundle.sh
+
+AWS_PROFILE=dev /usr/bin/bash offline/verify_published_bundle.sh \
+  s3://bucket/prefix/issue-10-test/
 ```
 
 ## Consume on the offline server
