@@ -2,16 +2,15 @@
 
 ## Now
 
-- Keep the existing `scrnaseq` offline demonstration understandable and intact.
-- Establish the Sarek offline acceptance contract.
+- Implement and prove one portable cached `nf-core/demo` offline bundle builder.
+- Keep the existing `scrnaseq` demonstration intact.
 
 ## Next
 
-- Inventory one Sarek revision, its assets, images, plugins, and test input.
-- Add or adapt one repo-owned Bash command for the Sarek offline proof.
-- Run one bounded non-production proof and record the result.
+- Consume the generated bundle on a separately isolated offline server.
+- Publish a bundle to an explicitly approved private S3 prefix if required.
 
 ## Later
 
-- Generalize only after the single Sarek path is repeatable.
+- Scale the pattern to Sarek only after the demo path is repeatable.
 - Consider additional pipelines only when they have a concrete owner and need.
