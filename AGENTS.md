@@ -17,9 +17,11 @@ Current canonical implementation milestone:
 
 - Issue #12 / PR #14 — fast same-**online server** offline-emulation proof using the merged `offline/` bundle path.
 
-Separate experimental lane:
+Validated colleague-facing handoff:
 
-- Issue #7 / PR #8 — standalone colleague-facing `docs/ops/**` Magic Script validation. Do not mix its implementation into the canonical `offline/` path unless a later reviewed decision explicitly promotes it.
+- PR #8 / completed Issue #7 — standalone `docs/ops/**` Magic Script. Its `nf-core/demo` 1.0.2 path has passed a relocated same-online-server offline-emulation proof with Skopeo archives, isolated Podman loading, bundle-local Nextflow state, explicit `-offline`, and task network isolation.
+
+Keep the canonical `offline/` implementation and the standalone `docs/ops/**` handoff conceptually separate. Do not silently merge their architectures or copy changes between them without a focused reviewed task.
 
 Sarek is a later scale-up milestone. It is not the default next task for agents.
 
@@ -46,7 +48,7 @@ The fast offline-emulation proof is not the same as proving the host has no inte
 - S3 publication must remain explicit; use `PUBLISH_S3=no` for the normal fast validation loop unless the task specifically owns a transfer/release proof.
 - Do not add credentials, real clinical data, or environment-specific secrets to Git.
 - Preserve existing work. Do not create a framework, UI, CI system, IaC layer, CloudOS integration, or broad test suite for a focused proof.
-- Respect active PR ownership. In particular, avoid `docs/ops/**` while PR #8 is active and avoid the Issue #12 request packet while PR #14 is active.
+- Respect active PR ownership. In particular, avoid the Issue #12 request packet while PR #14 is active and avoid unrelated changes to `docs/ops/**` unless the task explicitly targets that standalone handoff.
 - Create temporary folders or worktrees only when needed. Keep durable work in Git; remove the exact lane-owned temporary path after a terminal task.
 
 ## Terminology
