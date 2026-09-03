@@ -33,7 +33,8 @@ repository. Its default `SOURCE_MODE=s3-cache` reads the existing demo bundle
 and the existing `rnaseq-tiny-20260624` fixture, stages the required plugin,
 discovers images, reuses portable image archives, runs `nextflow ... -offline`,
 and writes metadata/checksums. `SOURCE_MODE=public` retains the nf-core download
-and image-pull path for a new pinned revision.
+path for a new pinned revision and stages the HTTP test samplesheet and FASTQ
+inputs locally before the smoke run.
 
 S3 publication is opt-in only. Set `PUBLISH_S3=yes` and an exact `S3_ROOT`;
 the builder syncs to `<S3_ROOT>/<pipeline-name>/<revision>/`. The default is
@@ -47,8 +48,8 @@ the builder syncs to `<S3_ROOT>/<pipeline-name>/<revision>/`. The default is
   configs/                  centralised configs, when supplied by the pipeline
   containers/*.tar          portable Podman/Docker archives
   plugins/nextflow-home/    Nextflow framework and plugin cache
-  data/reads/               S3-sourced tiny FASTQ and samplesheet
-  data/refs/                S3-sourced local references
+  data/reads/               staged tiny FASTQ and samplesheet
+  data/refs/                staged local references
   offline/                  params, custom smoke profile, smoke output
   manifests/                image, plugin, version, release, and SHA-256 data
   README.txt                offline transfer/load/run instructions
@@ -62,8 +63,9 @@ the builder syncs to `<S3_ROOT>/<pipeline-name>/<revision>/`. The default is
   present below `BUNDLE_ROOT`;
 - `NXF_OFFLINE=true`, `NXF_PLUGIN_AUTOINSTALL=false`, local executor, and the
   offline config are used for the smoke test;
-- every exported image archive is a valid tar and is listed with its image ID
-  and SHA-256 checksum;
+- every exported image archive is a valid tar, is loaded from the bundle by
+  default for the smoke proof, and is listed with its image ID and SHA-256
+  checksum;
 - a SHA-256 manifest is generated for optional later transfer validation;
 - local Nextflow offline smoke validation exits zero;
 - generated bundle content stays outside Git;

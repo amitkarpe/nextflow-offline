@@ -50,9 +50,19 @@ Use `offline/build_offline_bundle.sh` with:
 The builder may generate `manifests/files.sha256` for later transfer
 validation, but checksum verification is not part of the fast smoke gate.
 
-Do not pull images when matching portable archives already exist. Load them
-into Podman only when the image is not already present. Keep the image cache
-keyed by pipeline and revision so repeat runs do not rediscover assets.
+The fast proof must load the portable archives from the bundle even if the
+same images already exist in Podman; otherwise the smoke can accidentally
+validate only the host cache. `LOAD_BUNDLE_IMAGES=no` is an explicit escape
+hatch for a non-proof local iteration. Keep the image cache keyed by pipeline
+and revision so repeat runs do not rediscover assets.
+
+The generated samplesheet uses paths relative to the bundle root, and the
+builder runs from that root. This keeps the bundle portable when transferred
+to a different local directory.
+
+Keep the offline profile's container registry prefix aligned with the
+`RepoTags` in the staged archives. Clearing the prefix can turn a fully
+qualified image into a different short name and make archive matching fail.
 
 ## S3 wording
 

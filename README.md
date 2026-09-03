@@ -26,8 +26,10 @@ BUNDLE_ROOT=/path/to/bundles/demo-1.0.2 \
 
 The default script reads the pinned workflow and image archives from the
 existing S3 cache, copies the selected tiny FASTQ/reference fixture, installs
-the required Nextflow plugin in the bundle, performs a local offline smoke run,
-and writes `manifests/files.sha256`. No public image pull is needed.
+the required Nextflow plugin in the bundle, loads the bundle image archives
+into Podman, performs a local offline smoke run, and writes
+`manifests/files.sha256`. No public image pull is needed. Set
+`LOAD_BUNDLE_IMAGES=no` only when intentionally skipping the bundle-load proof.
 
 Configuration defaults can be overridden in `offline/bundle.env` or the
 environment:
@@ -40,7 +42,9 @@ PIPELINE=nf-core/demo REVISION=1.0.2 PROFILE=podman \
 ```
 
 To prepare a new public revision instead, set `SOURCE_MODE=public` and use an
-empty bundle path. That path is slower because it pulls every image.
+empty bundle path. The builder stages the HTTP test samplesheet from the
+downloaded pipeline's `conf/test.config` and its FASTQ files into the bundle
+before the smoke run. That path is slower because it pulls every image.
 
 S3 publication is disabled by default. If an exact destination is approved,
 set it explicitly, for example:

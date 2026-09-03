@@ -21,6 +21,7 @@ DATA_S3_PREFIX="${DATA_S3_PREFIX:-s3://trust-team/nextflow-offline/data/rnaseq-t
 BUNDLE_ROOT="${BUNDLE_ROOT:-$HOME/.cache/nextflow-offline/${PIPELINE##*/}-${REVISION}}"
 PUBLISH_S3="${PUBLISH_S3:-no}"
 S3_ROOT="${S3_ROOT:-}"
+LOAD_BUNDLE_IMAGES="${LOAD_BUNDLE_IMAGES:-yes}"
 NXF_VER="${NXF_VER:-25.10.4}"
 export NXF_VER
 
@@ -51,6 +52,10 @@ if [ "$PUBLISH_S3" = yes ]; then
   need aws
   [ -n "$S3_ROOT" ] || { echo "S3_ROOT is required when PUBLISH_S3=yes" >&2; exit 1; }
 fi
+case "$LOAD_BUNDLE_IMAGES" in
+  yes|no) ;;
+  *) echo "LOAD_BUNDLE_IMAGES must be yes or no" >&2; exit 1 ;;
+esac
 
 # The host launcher pins Java/NXF_HOME. Invoke its underlying launcher so the
 # bundle owns the framework and plugin cache.
@@ -93,6 +98,7 @@ if [ "$SOURCE_MODE" = s3-cache ]; then
   aws s3 cp "${S3_BUNDLE_PREFIX%/}/docker-images/" "$IMAGE_SOURCE/" --recursive --only-show-errors
   aws s3 cp "${DATA_S3_PREFIX%/}/" "$DATA_SOURCE/" --recursive --only-show-errors
 else
+  need curl
   nf-core pipelines download "$PIPELINE" -r "$REVISION" \
     --outdir "$STAGE_ROOT/download" \
     --compress none \
@@ -106,7 +112,34 @@ else
   if [ -d "$STAGE_ROOT/download/configs" ]; then
     cp -a "$STAGE_ROOT/download/configs" "$BUNDLE_ROOT/configs"
   fi
+  TEST_CONFIG="$WORKFLOW_SOURCE/conf/test.config"
+  [ -f "$TEST_CONFIG" ] || {
+    echo "public mode requires pipeline conf/test.config: $TEST_CONFIG" >&2
+    exit 1
+  }
+  TEST_INPUT_URL="$(grep -E '^[[:space:]]*input[[:space:]]*=' "$TEST_CONFIG" |
+    sed -n "s/.*['\"]\(https\?:[^'\"]*\)['\"].*/\1/p" | head -1)"
+  [ -n "$TEST_INPUT_URL" ] || {
+    echo "public mode could not find an HTTP test input in $TEST_CONFIG" >&2
+    exit 1
+  }
+  curl -fsSL "$TEST_INPUT_URL" -o "$DATA_SOURCE/upstream_samplesheet.csv"
+  while IFS=, read -r sample r1 r2; do
+    [ "$sample" = sample ] && continue
+    for url in "$r1" "$r2"; do
+      [ -n "$url" ] || continue
+      case "$url" in
+        http://*|https://*) ;;
+        *) echo "unsupported public test input URL: $url" >&2; exit 1 ;;
+      esac
+      filename="${url##*/}"
+      curl -fsSL "$url" -o "$DATA_SOURCE/$filename"
+    done
+  done < "$DATA_SOURCE/upstream_samplesheet.csv"
+  DATA_SOURCE_LABEL="$TEST_INPUT_URL"
 fi
+
+[ -n "${DATA_SOURCE_LABEL:-}" ] || DATA_SOURCE_LABEL="$DATA_S3_PREFIX"
 
 [ -f "$WORKFLOW_SOURCE/main.nf" ] || { echo "workflow/main.nf not found" >&2; exit 1; }
 cp -a "$WORKFLOW_SOURCE/." "$BUNDLE_ROOT/workflow/"
@@ -114,20 +147,19 @@ cp -a "$WORKFLOW_SOURCE/." "$BUNDLE_ROOT/workflow/"
 R1_SOURCE="$(find "$DATA_SOURCE" -type f -name '*R1*.fastq.gz' -print -quit)"
 R2_SOURCE="$(find "$DATA_SOURCE" -type f -name '*R2*.fastq.gz' -print -quit)"
 [ -n "$R1_SOURCE" ] && [ -n "$R2_SOURCE" ] || {
-  echo "paired FASTQ files were not found under $DATA_S3_PREFIX" >&2
+  echo "paired FASTQ files were not found under $DATA_SOURCE_LABEL" >&2
   exit 1
 }
 cp "$R1_SOURCE" "$BUNDLE_ROOT/data/reads/tiny_R1.fastq.gz"
 cp "$R2_SOURCE" "$BUNDLE_ROOT/data/reads/tiny_R2.fastq.gz"
 cat > "$BUNDLE_ROOT/data/reads/samplesheet.csv" <<EOF
 sample,fastq_1,fastq_2
-OFFLINE_TINY,$BUNDLE_ROOT/data/reads/tiny_R1.fastq.gz,$BUNDLE_ROOT/data/reads/tiny_R2.fastq.gz
+OFFLINE_TINY,data/reads/tiny_R1.fastq.gz,data/reads/tiny_R2.fastq.gz
 EOF
-find "$DATA_SOURCE" -maxdepth 1 -type f \(
-  -name '*.fasta' -o -name '*.fa' -o -name '*.gtf' -o -name '*.gtf.gz'
-\) -exec cp {} "$BUNDLE_ROOT/data/refs/" \;
+find "$DATA_SOURCE" -maxdepth 1 -type f \( -name '*.fasta' -o -name '*.fa' -o -name '*.gtf' -o -name '*.gtf.gz' \) \
+  -exec cp {} "$BUNDLE_ROOT/data/refs/" \;
 cat > "$BUNDLE_ROOT/data/refs/README.txt" <<EOF
-Input source: $DATA_S3_PREFIX
+Input source: $DATA_SOURCE_LABEL
 The FASTQ and reference files are pre-staged local assets; no runtime download is allowed.
 EOF
 
@@ -177,19 +209,13 @@ CONTAINER_ENGINE="$CONTAINER_ENGINE" \
   "$REPO_ROOT/scripts/fetch_and_save_images.sh" \
   "$BUNDLE_ROOT/manifests/inspect.json" "$BUNDLE_ROOT/containers"
 
-load_required=no
-while IFS= read -r image; do
-  if ! "$CONTAINER_ENGINE" image inspect "$image" >/dev/null 2>&1; then
-    load_required=yes
-  fi
-done < <(jq -r '.processes[]?.container? | select(type == "string" and length > 0)' "$BUNDLE_ROOT/manifests/inspect.json" | sort -u)
-if [ "$load_required" = yes ]; then
+if [ "$LOAD_BUNDLE_IMAGES" = yes ]; then
   for archive in "$BUNDLE_ROOT"/containers/*.tar; do
     [ -f "$archive" ] || continue
     "$CONTAINER_ENGINE" load -i "$archive"
   done
 else
-  echo "All inspected images are already loaded in $CONTAINER_ENGINE"
+  echo "Skipping bundle image loads (LOAD_BUNDLE_IMAGES=no)"
 fi
 
 cat > "$BUNDLE_ROOT/manifests/pipeline.env" <<EOF
@@ -199,6 +225,7 @@ PROFILE=$CONTAINER_PROFILE
 CONTAINER_ENGINE=$CONTAINER_ENGINE
 SOURCE_MODE=$SOURCE_MODE
 DATA_S3_PREFIX=$DATA_S3_PREFIX
+INPUT_SOURCE=$DATA_SOURCE_LABEL
 NXF_VER=$NXF_VER
 NEXTFLOW_OFFLINE=true
 NXF_PLUGIN_AUTOINSTALL=false
@@ -213,22 +240,25 @@ EOF
 SMOKE_OUT="$BUNDLE_ROOT/offline/smoke-output"
 SMOKE_WORK="$STAGE_ROOT/smoke-work"
 mkdir -p "$SMOKE_OUT"
-nf run "$BUNDLE_ROOT/workflow" \
-  -profile "$CONTAINER_PROFILE,offline_smoke" \
-  -params-file "$BUNDLE_ROOT/offline/params_offline.json" \
-  -c "$BUNDLE_ROOT/offline/offline_test.conf" \
-  --input "$BUNDLE_ROOT/data/reads/samplesheet.csv" \
-  --outdir "$SMOKE_OUT" \
-  -work-dir "$SMOKE_WORK" \
-  -offline \
-  -with-report "$SMOKE_OUT/execution-report.html"
+(
+  cd "$BUNDLE_ROOT"
+  nf run "$BUNDLE_ROOT/workflow" \
+    -profile "$CONTAINER_PROFILE,offline_smoke" \
+    -params-file "$BUNDLE_ROOT/offline/params_offline.json" \
+    -c "$BUNDLE_ROOT/offline/offline_test.conf" \
+    --input data/reads/samplesheet.csv \
+    --outdir "$SMOKE_OUT" \
+    -work-dir "$SMOKE_WORK" \
+    -offline \
+    -with-report "$SMOKE_OUT/execution-report.html"
+)
 
 cat > "$BUNDLE_ROOT/README.txt" <<EOF
 Portable Nextflow offline bundle
 Pipeline: $PIPELINE
 Revision: $REVISION
 Container engine: $CONTAINER_ENGINE
-Input source: $DATA_S3_PREFIX
+Input source: $DATA_SOURCE_LABEL
 
 This bundle was assembled on an online server and validated locally with
 NXF_OFFLINE=true. An offline server must use only this bundle.
@@ -239,13 +269,14 @@ Load containers:
     $CONTAINER_ENGINE load -i "\$image"
   done
 
-Run:
+Run from the bundle root:
+  cd <bundle>
   NXF_VER=$NXF_VER NXF_OFFLINE=true NXF_PLUGIN_AUTOINSTALL=false \\
-    NXF_HOME=<bundle>/plugins/nextflow-home \\
-    nextflow run <bundle>/workflow -profile $CONTAINER_PROFILE,offline_smoke \\
-    -params-file <bundle>/offline/params_offline.json \\
-    -c <bundle>/offline/offline_test.conf \\
-    --input <bundle>/data/reads/samplesheet.csv \\
+    NXF_HOME=\$PWD/plugins/nextflow-home \\
+    nextflow run \$PWD/workflow -profile $CONTAINER_PROFILE,offline_smoke \\
+    -params-file \$PWD/offline/params_offline.json \\
+    -c \$PWD/offline/offline_test.conf \\
+    --input data/reads/samplesheet.csv \\
     --outdir ./results -work-dir ./work -offline -resume
 EOF
 ( cd "$BUNDLE_ROOT" &&
