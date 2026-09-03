@@ -304,6 +304,7 @@ if [ "$PUBLISH_S3" = yes ]; then
       --bucket "$PUBLISH_BUCKET" \
       --prefix "$PUBLISH_KEY_PREFIX" \
       --max-keys 1 \
+      --no-paginate \
       --query 'KeyCount' \
       --output text)"
     if [ "$existing_key_count" != 0 ]; then
