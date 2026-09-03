@@ -21,7 +21,9 @@ nf-core pipelines download sarek -r "$SAREK_VERSION" \
   --outdir "$BUNDLE_ROOT" --compress none --container-system none \
   --download-configuration --force
 cp "$SCRIPT_DIR/offline_test.conf" "$BUNDLE_ROOT/offline/offline_test.conf"
-cp "$SCRIPT_DIR/params_offline.json" "$BUNDLE_ROOT/offline/params_offline.json"
+SAREK_PARAMS_FILE="$SCRIPT_DIR/params_sarek_offline.json"
+[ -f "$SAREK_PARAMS_FILE" ] || { echo "Sarek params file missing: $SAREK_PARAMS_FILE" >&2; exit 1; }
+cp "$SAREK_PARAMS_FILE" "$BUNDLE_ROOT/offline/params_sarek_offline.json"
 
 export NXF_HOME="${NXF_HOME:-$BUNDLE_ROOT/offline/nextflow-home}"
 for plugin in nf-core-utils@0.4.0 nf-fgbio@1.0.0 nf-prov@1.7.0 nf-schema@2.7.2; do

@@ -3,21 +3,19 @@
 ## Current Truth
 
 - Repository: offline Nextflow demonstration scripts.
-- Current baseline: existing `scrnaseq` cache, image-load, and offline-run
-  path; no end-to-end runtime proof was produced by this documentation change.
-- Active implementation branch: `feature/issue-1-sarek-offline`.
-- Draft PR: #3 targeting `main`.
-- Current commit: `f1f1ebc` (Sarek bundle scaffold and offline contract).
-- Static validation passes; no AWS or runtime proof has been produced.
+- Active direction: Issue #5 Phase 1 portable bundle builder.
+- Default proof target: cached `nf-core/demo` revision `1.0.2` with Podman.
+- Default input: `s3://trust-team/nextflow-offline/data/rnaseq-tiny-20260624/`.
+- S3 publication is opt-in and is not run by default.
+- Existing `scrnaseq` and Sarek files remain preserved/deferred.
 
 ## Next Action
 
-Before any Sarek execution, stage the pinned `3.10.0` bundle, plugin cache,
-non-production input, local references, and private-ECR image map. Then run
-`offline/run_sarek_offline.sh` only from the endpoint-isolated EC2 test lane.
+Run `offline/build_offline_bundle.sh` in an online-server lane with an empty
+`BUNDLE_ROOT`, then inspect the generated manifests and offline smoke result.
 
 ## Boundaries
 
-- No public download during the offline proof.
-- No production data, credentials, or cloud mutation in this repository-only
-  implementation phase. AWS/runtime evidence remains `UNKNOWN_PENDING`.
+- Public access is allowed only during online preparation.
+- The offline smoke must use only the bundle and `-offline`.
+- No production/clinical data, credentials, or unapproved S3 publication.
