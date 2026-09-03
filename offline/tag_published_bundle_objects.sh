@@ -68,7 +68,7 @@ tagging_json="$(jq -nc \
 inventory_file="$(mktemp "${TMPDIR:-/tmp}/nextflow-s3-tag-inventory.XXXXXX")"
 trap 'rm -f "$inventory_file"' EXIT
 "$AWS_BIN" s3api list-objects-v2 --bucket "$bucket" --prefix "$prefix" --output json > "$inventory_file"
-object_count="$(jq -r '.KeyCount' "$inventory_file")"
+object_count="$(jq '[.Contents[]?.Key] | length' "$inventory_file")"
 [ "$object_count" -gt 0 ] || { echo "published prefix is empty: $PUBLISH_URI" >&2; exit 1; }
 
 active=0
