@@ -18,7 +18,8 @@ if command -v nextflow >/dev/null 2>&1; then
   export NXF_HOME="$BUNDLE_ROOT/plugins/nextflow-home"
   export NXF_OFFLINE=true
   export NXF_PLUGIN_AUTOINSTALL=false
-  nextflow config "$BUNDLE_ROOT/workflow" -c "$BUNDLE_ROOT/offline/offline_test.conf" -flat > /tmp/nextflow-offline-config-flat.txt
+  NXF_CONFIG_FILE="$BUNDLE_ROOT/offline/offline_test.conf" \
+    nextflow config "$BUNDLE_ROOT/workflow" -flat > /tmp/nextflow-offline-config-flat.txt
   grep -E 'custom_config_base|pipelines_testdata_base_path|validate_params' /tmp/nextflow-offline-config-flat.txt || true
 fi
 
