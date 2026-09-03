@@ -73,6 +73,8 @@ object by default. `S3_ROOT` remains a compatibility fallback that derives
 - optional S3 publication is explicit and its destination is recorded.
 - `offline/verify_published_bundle.sh <exact-s3-prefix>` performs a
   non-destructive object inventory and README metadata readback.
+- `offline/tag_published_bundle_objects.sh <exact-s3-prefix> <TTL>` applies
+  the required object tags to a temporary publication prefix.
 
 ## No-go and deferred work
 

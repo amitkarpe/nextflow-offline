@@ -60,6 +60,13 @@ AWS_PROFILE=dev /usr/bin/bash offline/verify_published_bundle.sh \
   s3://bucket/prefix/issue-10-test/
 ```
 
+For a temporary proof prefix, apply the required object tags after upload:
+
+```bash
+AWS_PROFILE=dev /usr/bin/bash offline/tag_published_bundle_objects.sh \
+  s3://bucket/prefix/issue-10-test/ 10-09-26
+```
+
 ## Consume on the offline server
 
 Transfer the complete bundle directory, then load every archive:
