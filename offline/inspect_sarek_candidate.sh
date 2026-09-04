@@ -7,6 +7,7 @@ PIPELINE="${PIPELINE:-nf-core/sarek}"
 REVISION="${REVISION:-3.5.1}"
 PROFILE="${PROFILE:-podman}"
 SOURCE_MODE="${SOURCE_MODE:-public}"
+PREVIEW_TIMEOUT_SECONDS="${PREVIEW_TIMEOUT_SECONDS:-300}"
 : "${BUNDLE_ROOT:?BUNDLE_ROOT must name a fresh candidate directory}"
 
 need() {
@@ -38,6 +39,7 @@ need nextflow
 need jq
 need gzip
 need sha256sum
+need timeout
 
 BUNDLE_ROOT="$(mkdir -p "$BUNDLE_ROOT" && cd "$BUNDLE_ROOT" && pwd)"
 [ -z "$(find "$BUNDLE_ROOT" -mindepth 1 -maxdepth 1 -print -quit)" ] || {
@@ -140,37 +142,168 @@ export NXF_PLUGIN_AUTOINSTALL=false
 
 jq -e '.processes | type == "array" and length > 0' \
   "$BUNDLE_ROOT/manifests/inspect.json" >/dev/null
-jq -r '.processes[]? | .container? | select(type == "string" and length > 0)' \
-  "$BUNDLE_ROOT/manifests/inspect.json" | sort -u > "$BUNDLE_ROOT/manifests/images.txt"
-[ -s "$BUNDLE_ROOT/manifests/images.txt" ] || {
-  echo "empty image inventory" >&2
+jq -r '
+  .processes[]?
+  | select(.name | type == "string")
+  | [.name, (if (.container | type) == "string" then .container else "" end)]
+  | @tsv
+' "$BUNDLE_ROOT/manifests/inspect.json" | sort -u \
+  > "$BUNDLE_ROOT/manifests/static-process-containers.tsv"
+[ -s "$BUNDLE_ROOT/manifests/static-process-containers.tsv" ] || {
+  echo "empty static process-to-container inventory" >&2
   exit 1
 }
 
-printf 'source\tregistry\n' > "$BUNDLE_ROOT/manifests/image-registries.tsv"
-quay_only=yes
+awk -F '\t' '$2 != "" { print $2 }' \
+  "$BUNDLE_ROOT/manifests/static-process-containers.tsv" | sort -u \
+  > "$BUNDLE_ROOT/manifests/static-images.txt"
+[ -s "$BUNDLE_ROOT/manifests/static-images.txt" ] || {
+  echo "empty static image inventory" >&2
+  exit 1
+}
+
+printf 'source\tregistry\n' > "$BUNDLE_ROOT/manifests/static-image-registries.tsv"
+static_quay_only=yes
 while IFS= read -r image; do
   case "$image" in
     quay.io/*) registry=quay.io ;;
-    *) registry="${image%%/*}"; quay_only=no ;;
+    *) registry="${image%%/*}"; static_quay_only=no ;;
   esac
-  printf '%s\t%s\n' "$image" "$registry" >> "$BUNDLE_ROOT/manifests/image-registries.tsv"
-done < "$BUNDLE_ROOT/manifests/images.txt"
+  printf '%s\t%s\n' "$image" "$registry" >> "$BUNDLE_ROOT/manifests/static-image-registries.tsv"
+done < "$BUNDLE_ROOT/manifests/static-images.txt"
 
-image_count="$(wc -l < "$BUNDLE_ROOT/manifests/images.txt" | tr -d '[:space:]')"
-registries="$(tail -n +2 "$BUNDLE_ROOT/manifests/image-registries.tsv" | cut -f2 | sort -u | paste -sd, -)"
-printf 'PIPELINE=%s\n' "$PIPELINE" > "$BUNDLE_ROOT/manifests/result.env"
-printf 'REVISION=%s\n' "$REVISION" >> "$BUNDLE_ROOT/manifests/result.env"
-printf 'STATIC_IMAGE_COUNT=%s\n' "$image_count" >> "$BUNDLE_ROOT/manifests/result.env"
-printf 'STATIC_IMAGE_REGISTRIES=%s\n' "$registries" >> "$BUNDLE_ROOT/manifests/result.env"
-if [ "$quay_only" = yes ]; then
-  printf 'STATIC_QUAY_ONLY=PASS\nQUAY_ONLY=UNKNOWN\nOFFLINE_SAFE=UNKNOWN_PENDING\nRESULT=BLOCKED\n' >> "$BUNDLE_ROOT/manifests/result.env"
-else
-  printf 'STATIC_QUAY_ONLY=FAIL\nQUAY_ONLY=UNKNOWN\nOFFLINE_SAFE=UNKNOWN_PENDING\nRESULT=BLOCKED\n' >> "$BUNDLE_ROOT/manifests/result.env"
+static_image_count="$(wc -l < "$BUNDLE_ROOT/manifests/static-images.txt" | tr -d '[:space:]')"
+static_registries="$(tail -n +2 "$BUNDLE_ROOT/manifests/static-image-registries.tsv" | cut -f2 | sort -u | paste -sd, -)"
+
+preview_log="$BUNDLE_ROOT/manifests/preview.log"
+preview_dag="$BUNDLE_ROOT/manifests/preview-dag.html"
+preview_rc=0
+(
+  cd "$BUNDLE_ROOT"
+  timeout "$PREVIEW_TIMEOUT_SECONDS" nextflow run "$BUNDLE_ROOT/workflow" \
+    -profile "$PROFILE,offline_smoke" \
+    -params-file "$BUNDLE_ROOT/offline/params_sarek_offline.json" \
+    -c "$BUNDLE_ROOT/offline/offline_test.conf" \
+    -offline \
+    -preview \
+    -with-dag "$preview_dag"
+) > "$preview_log" 2>&1 || preview_rc=$?
+
+if [ "$preview_rc" -eq 0 ] && [ -s "$preview_dag" ]; then
+  awk '
+    function process_node(line, node) {
+      node = line
+      sub(/^[^[]*\[/, "", node)
+      sub(/\].*/, "", node)
+      return node
+    }
+    /^[[:space:]]*subgraph[[:space:]]+/ {
+      label = $0
+      sub(/^[[:space:]]*subgraph[[:space:]]+/, "", label)
+      gsub(/^"|"$/, "", label)
+      if (label == "NFCORE_SAREK") {
+        active = 1
+        depth = 1
+        path[depth] = label
+      }
+      else if (active) {
+        depth++
+        path[depth] = label
+      }
+      next
+    }
+    active && /^[[:space:]]*end[[:space:]]*$/ {
+      if (depth == 1) {
+        active = 0
+        depth = 0
+      }
+      else {
+        delete path[depth]
+        depth--
+      }
+      next
+    }
+    active && /^[[:space:]]*v[0-9]+\(\[[^]]+\]\)/ {
+      full = path[1]
+      for (i = 2; i <= depth; i++) full = full ":" path[i]
+      print full ":" process_node($0)
+    }
+  ' "$preview_dag" | sort -u > "$BUNDLE_ROOT/manifests/active-processes.txt"
+
+  [ -s "$BUNDLE_ROOT/manifests/active-processes.txt" ] || preview_rc=4
 fi
-cat "$BUNDLE_ROOT/manifests/result.env"
 
-echo "Static inspection includes conditional processes; it is not an active-path inventory."
-echo "An active-path proof is required before asserting QUAY_ONLY or OFFLINE_SAFE."
+if [ "$preview_rc" -ne 0 ]; then
+  {
+    printf 'PIPELINE=%s\nREVISION=%s\n' "$PIPELINE" "$REVISION"
+    printf 'STATIC_IMAGE_COUNT=%s\nSTATIC_IMAGE_REGISTRIES=%s\n' "$static_image_count" "$static_registries"
+    if [ "$static_quay_only" = yes ]; then printf 'STATIC_QUAY_ONLY=PASS\n'; else printf 'STATIC_QUAY_ONLY=FAIL\n'; fi
+    printf 'PREVIEW_RC=%s\nPREVIEW_MODE=true\nNEXTFLOW_OFFLINE_FLAG=true\n' "$preview_rc"
+    printf 'PODMAN_ACTIONS=NONE_OBSERVED\nTASK_EXECUTION=NONE_OBSERVED\n'
+    printf 'ACTIVE_IMAGE_COUNT=UNKNOWN\nQUAY_ONLY=UNKNOWN\n'
+    printf 'OFFLINE_SAFE=UNKNOWN_PENDING\nRESULT=BLOCKED\n'
+  } > "$BUNDLE_ROOT/manifests/result.env"
+  cat "$BUNDLE_ROOT/manifests/result.env"
+  echo "Preview DAG was unavailable; no active-path image conclusion was made." >&2
+  exit 3
+fi
+
+awk -F '\t' '
+  NR == FNR { count[$1]++; image[$1] = $2; next }
+  {
+    if (count[$1] != 1 || image[$1] == "") {
+      print $1 >> unresolved
+      next
+    }
+    print $1 "\t" image[$1]
+  }
+' unresolved="$BUNDLE_ROOT/manifests/unresolved-active-processes.txt" \
+  "$BUNDLE_ROOT/manifests/static-process-containers.tsv" \
+  "$BUNDLE_ROOT/manifests/active-processes.txt" \
+  > "$BUNDLE_ROOT/manifests/active-process-containers.tsv"
+
+if [ -s "$BUNDLE_ROOT/manifests/unresolved-active-processes.txt" ]; then
+  {
+    printf 'PIPELINE=%s\nREVISION=%s\n' "$PIPELINE" "$REVISION"
+    printf 'STATIC_IMAGE_COUNT=%s\nSTATIC_IMAGE_REGISTRIES=%s\n' "$static_image_count" "$static_registries"
+    if [ "$static_quay_only" = yes ]; then printf 'STATIC_QUAY_ONLY=PASS\n'; else printf 'STATIC_QUAY_ONLY=FAIL\n'; fi
+    printf 'PREVIEW_RC=0\nPREVIEW_MODE=true\nNEXTFLOW_OFFLINE_FLAG=true\n'
+    printf 'PODMAN_ACTIONS=NONE_OBSERVED\nTASK_EXECUTION=NONE_OBSERVED\n'
+    printf 'ACTIVE_IMAGE_COUNT=UNKNOWN\nQUAY_ONLY=UNKNOWN\n'
+    printf 'OFFLINE_SAFE=UNKNOWN_PENDING\nRESULT=BLOCKED\n'
+  } > "$BUNDLE_ROOT/manifests/result.env"
+  cat "$BUNDLE_ROOT/manifests/result.env"
+  echo "One or more active processes have no unique static container mapping." >&2
+  exit 3
+fi
+
+awk -F '\t' '{ print $2 }' "$BUNDLE_ROOT/manifests/active-process-containers.tsv" | sort -u \
+  > "$BUNDLE_ROOT/manifests/active-images.txt"
+active_image_count="$(wc -l < "$BUNDLE_ROOT/manifests/active-images.txt" | tr -d '[:space:]')"
+printf 'source\tregistry\n' > "$BUNDLE_ROOT/manifests/active-image-registries.tsv"
+active_quay_only=yes
+while IFS= read -r image; do
+  case "$image" in
+    quay.io/*) registry=quay.io ;;
+    *) registry="${image%%/*}"; active_quay_only=no ;;
+  esac
+  printf '%s\t%s\n' "$image" "$registry" >> "$BUNDLE_ROOT/manifests/active-image-registries.tsv"
+done < "$BUNDLE_ROOT/manifests/active-images.txt"
+active_registries="$(tail -n +2 "$BUNDLE_ROOT/manifests/active-image-registries.tsv" | cut -f2 | sort -u | paste -sd, -)"
+
+{
+  printf 'PIPELINE=%s\nREVISION=%s\n' "$PIPELINE" "$REVISION"
+  printf 'STATIC_IMAGE_COUNT=%s\nSTATIC_IMAGE_REGISTRIES=%s\n' "$static_image_count" "$static_registries"
+  if [ "$static_quay_only" = yes ]; then printf 'STATIC_QUAY_ONLY=PASS\n'; else printf 'STATIC_QUAY_ONLY=FAIL\n'; fi
+  printf 'PREVIEW_RC=0\nPREVIEW_MODE=true\nNEXTFLOW_OFFLINE_FLAG=true\n'
+  printf 'PODMAN_ACTIONS=NONE_OBSERVED\nTASK_EXECUTION=NONE_OBSERVED\n'
+  printf 'ACTIVE_IMAGE_COUNT=%s\nACTIVE_IMAGE_REGISTRIES=%s\n' "$active_image_count" "$active_registries"
+  if [ "$active_quay_only" = yes ]; then
+    printf 'QUAY_ONLY=PASS\nOFFLINE_SAFE=true\nRESULT=SUCCESS\n'
+  else
+    printf 'QUAY_ONLY=FAIL\nOFFLINE_SAFE=false\nRESULT=BLOCKED\n'
+  fi
+} > "$BUNDLE_ROOT/manifests/result.env"
+cat "$BUNDLE_ROOT/manifests/result.env"
 
 echo "No container pull, save, load, or task execution was performed."
