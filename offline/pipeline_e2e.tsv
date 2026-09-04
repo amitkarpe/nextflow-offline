@@ -1,0 +1,4 @@
+key	pipeline	revision	workflow_s3_key	data_s3_key	reference_source_images	fixture
+demo	nf-core/demo	1.0.2	bundles/demo-1.0.2/1_0_2	data/rnaseq-tiny-20260624	offline/demo_source_images_historical.txt	paired-fastq
+bamtofastq	nf-core/bamtofastq	2.1.1	bundles/bamtofastq-2.1.1/2_1_1	-	offline/bamtofastq_source_images_historical.txt	generated-bam
+rnaseq	nf-core/rnaseq	3.18.0	workflows/rnaseq-3.18.0/3_18_0	data/rnaseq-tiny-20260624	offline/rnaseq_source_images_historical.txt	paired-fastq-reference
