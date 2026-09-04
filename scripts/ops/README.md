@@ -32,6 +32,12 @@ aggregate `RESULT.md`, `status.tsv`, and `.done`/`.failed` marker. Set
 `CODEX_QUEUE_THREAD` only for a verified session UUID; otherwise completion is
 signalled by durable evidence, desktop notification, and terminal bell.
 
+The home-local pipeline E2E preparation uses `offline/pipeline_e2e.tsv`,
+`offline/discover_pipeline_e2e.sh`, and `offline/run_all_pipeline_discovery.sh`.
+It stages only private S3 workflow/data assets, installs per-bundle plugins,
+and fails closed unless every inspected process container has an exact mapping
+to the immutable per-pipeline ECR manifest. It does not run Podman or tasks.
+
 Provenance for future agents: retain the manifest/evidence shape from
 `../offline/common/aws-validation/mirror-ecr-images-with-crane-container.sh`.
 Do not reuse that script's Docker/Crane engine here because this lane requires

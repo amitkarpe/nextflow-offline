@@ -1,0 +1,4 @@
+key	pipeline	revision	workflow_s3_uri	data_s3_uri	source_images	fixture
+demo	nf-core/demo	1.0.2	s3://trust-team/nextflow-offline/bundles/demo-1.0.2/1_0_2	s3://trust-team/nextflow-offline/data/rnaseq-tiny-20260624	offline/demo_source_images_historical.txt	paired-fastq
+bamtofastq	nf-core/bamtofastq	2.1.1	s3://trust-team/nextflow-offline/bundles/bamtofastq-2.1.1/2_1_1	-	offline/bamtofastq_source_images_historical.txt	generated-bam
+rnaseq	nf-core/rnaseq	3.18.0	s3://trust-team/nextflow-offline/workflows/rnaseq-3.18.0/3_18_0	s3://trust-team/nextflow-offline/data/rnaseq-tiny-20260624	offline/rnaseq_source_images_historical.txt	paired-fastq-reference
