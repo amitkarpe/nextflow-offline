@@ -316,6 +316,11 @@ active_registries="$(tail -n +2 "$BUNDLE_ROOT/manifests/active-image-registries.
   fi
 } > "$BUNDLE_ROOT/manifests/result.env"
 cat "$BUNDLE_ROOT/manifests/result.env"
-printf 'RESULT=SUCCESS\n' > "$BUNDLE_ROOT/.done"
 
 echo "No container pull, save, load, or task execution was performed."
+if [ "$active_quay_only" = yes ]; then
+  printf 'RESULT=SUCCESS\n' > "$BUNDLE_ROOT/.done"
+else
+  printf 'RESULT=BLOCKED\n' > "$BUNDLE_ROOT/.blocked"
+  exit 3
+fi
