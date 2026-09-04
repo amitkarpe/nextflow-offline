@@ -65,19 +65,27 @@ mkdir -p "$test_root"
   exit 2
 }
 cp -a "$prepared_bundle/." "$test_root/"
+for inherited_marker in "$test_root/.done" "$test_root/.failed"; do
+  if [ -f "$inherited_marker" ]; then
+    find "$inherited_marker" -maxdepth 0 -type f -delete
+  fi
+done
 for required in workflow data plugins manifests offline; do
   [ -e "$test_root/$required" ] || { echo "relocated bundle path missing: $required" >&2; exit 1; }
 done
 [ -f "$test_root/manifests/ecr-images.tsv" ] || { echo "ECR manifest missing" >&2; exit 1; }
 [ -f "$test_root/offline/nextflow-ecr-containers.config" ] || { echo "ECR override missing" >&2; exit 1; }
 
-sha256sum -c "$test_root/manifests/files.sha256" > "$test_root/manifests/relocated-checksums.log" 2>&1 || true
-# Discovery bundles do not yet carry transfer checksums; create and validate a
-# relocated inventory for this proof without modifying the source bundle.
-if ! grep -q ': OK$' "$test_root/manifests/relocated-checksums.log" 2>/dev/null; then
+if [ -f "$test_root/manifests/files.sha256" ]; then
+  ( cd "$test_root" && sha256sum -c manifests/files.sha256 ) > "$test_root/manifests/relocated-checksums.log"
+else
+  # Discovery bundles do not yet carry transfer checksums; create and validate
+  # a relocated inventory without modifying the source bundle.
   (
     cd "$test_root"
-    find . -type f ! -path './manifests/relocated-files.sha256' -print0 |
+    find . -type f \
+      ! -path './manifests/relocated-files.sha256' \
+      ! -path './manifests/relocated-checksums.log' -print0 |
       sort -z | xargs -0 sha256sum
   ) > "$test_root/manifests/relocated-files.sha256"
   ( cd "$test_root" && sha256sum -c manifests/relocated-files.sha256 ) > "$test_root/manifests/relocated-checksums.log"
