@@ -18,7 +18,7 @@ ONLINE SERVER
        - manifest + checksums
               |
               v
-s3://trust-team/nextflow-offline/bundles/<pipeline>-<revision>/magic-v1/
+s3://<approved-bucket>/nextflow-offline/bundles/<pipeline>-<revision>/magic-v1/
               |
               v
 OFFLINE SERVER
@@ -60,7 +60,7 @@ Defaults:
 
 ```text
 AWS_PROFILE=dev
-S3_ROOT=s3://trust-team/nextflow-offline
+S3_ROOT=<set-local-approved-bucket>
 PIPELINE=demo
 REVISION=1.0.2
 IMAGE_MODE=archive
@@ -71,7 +71,7 @@ S3 publication is disabled by default. Set `PUBLISH_S3=yes` only for an
 explicitly approved destination:
 
 ```text
-s3://trust-team/nextflow-offline/bundles/demo-1.0.2/magic-v1/
+s3://<approved-bucket>/nextflow-offline/bundles/demo-1.0.2/magic-v1/
 ```
 
 Override `S3_BUNDLE_URI` in `.env` when an exact destination is required.
@@ -121,7 +121,7 @@ validate_params=false
 The catalogue reuses the existing tiny S3 data:
 
 ```text
-s3://trust-team/nextflow-offline/data/rnaseq-tiny-20260624/
+s3://<approved-bucket>/nextflow-offline/data/rnaseq-tiny/
 ```
 
 Run:

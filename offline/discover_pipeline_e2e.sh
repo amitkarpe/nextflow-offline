@@ -8,7 +8,12 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: discover_pipeline_e2e.sh --pipeline {demo|bamtofastq|rnaseq} --bundle-root DIR
+Usage: discover_pipeline_e2e.sh --pipeline KEY --bundle-root DIR [--descriptor FILE]
+       discover_pipeline_e2e.sh --pipeline KEY --plan [--descriptor FILE]
+
+--plan validates one descriptor row and prints the resolved preparation plan.
+It does not require AWS, stage assets, install plugins, inspect a workflow, or
+invoke Podman. Normal mode performs online discovery only.
 EOF
 }
 
@@ -22,20 +27,27 @@ if [ -f "$OPS_ENV" ]; then
 fi
 pipeline_key=""
 bundle_root=""
+descriptor="$REPO_ROOT/offline/pipeline_e2e.tsv"
+plan_only=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --pipeline) pipeline_key="${2:?missing pipeline}"; shift 2 ;;
     --bundle-root) bundle_root="${2:?missing bundle root}"; shift 2 ;;
+    --descriptor) descriptor="${2:?missing descriptor}"; shift 2 ;;
+    --plan) plan_only=true; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
-case "$pipeline_key" in demo|bamtofastq|rnaseq) ;; *) usage >&2; exit 2 ;; esac
-: "${AWS_PROFILE:?set AWS_PROFILE}"
-: "${AWS_REGION:?set AWS_REGION}"
-: "${S3_ROOT:?set S3_ROOT or scripts/ops/ENV}"
-case "$S3_ROOT" in s3://*) ;; *) echo "S3_ROOT must be an s3:// URI" >&2; exit 2 ;; esac
-[ -n "$bundle_root" ] || { usage >&2; exit 2; }
+case "$pipeline_key" in [a-z0-9][a-z0-9-]*) ;; *) echo "invalid pipeline key: $pipeline_key" >&2; exit 2 ;; esac
+[ -f "$descriptor" ] || { echo "pipeline descriptor missing: $descriptor" >&2; exit 2; }
+if [ "$plan_only" = false ]; then
+  : "${AWS_PROFILE:?set AWS_PROFILE}"
+  : "${AWS_REGION:?set AWS_REGION}"
+  : "${S3_ROOT:?set S3_ROOT or scripts/ops/ENV}"
+  case "$S3_ROOT" in s3://*) ;; *) echo "S3_ROOT must be an s3:// URI" >&2; exit 2 ;; esac
+  [ -n "$bundle_root" ] || { usage >&2; exit 2; }
+fi
 
 result_written=false
 on_exit() {
@@ -49,18 +61,41 @@ on_exit() {
 trap on_exit EXIT
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing command: $1" >&2; exit 1; }; }
-need aws
-need nextflow
-need jq
+need awk
 
-descriptor="$REPO_ROOT/offline/pipeline_e2e.tsv"
-row="$(awk -F '\t' -v key="$pipeline_key" 'NR > 1 && $1 == key {print; found=1} END {if (!found) exit 1}' "$descriptor")" || {
+header="$(head -n 1 "$descriptor")"
+[ "$header" = $'key\tpipeline\trevision\tworkflow_s3_key\tdata_s3_key\treference_source_images\tfixture' ] || {
+  echo "invalid descriptor header: $descriptor" >&2
+  exit 2
+}
+row="$(awk -F '\t' -v key="$pipeline_key" '
+  NR > 1 && NF != 7 { exit 2 }
+  NR > 1 && $1 == key { if (++count == 1) row = $0 }
+  END { if (count != 1) exit 1; print row }
+' "$descriptor")" || {
   echo "pipeline descriptor missing: $pipeline_key" >&2
   exit 2
 }
 IFS=$'\t' read -r _key pipeline revision workflow_s3_key data_s3_key reference_source_list fixture <<< "$row"
+case "$pipeline" in nf-core/*) ;; *) echo "pipeline must be an nf-core name: $pipeline" >&2; exit 2 ;; esac
+[ -n "$revision" ] || { echo "revision is empty for: $pipeline_key" >&2; exit 2; }
+case "$workflow_s3_key" in ''|/*|*'..'*|s3://*) echo "invalid workflow S3 key: $workflow_s3_key" >&2; exit 2 ;; esac
+case "$data_s3_key" in -) ;; ''|/*|*'..'*|s3://*) echo "invalid data S3 key: $data_s3_key" >&2; exit 2 ;; esac
+case "$fixture" in paired-fastq|paired-fastq-reference|generated-bam) ;; *) echo "unsupported discovery fixture: $fixture" >&2; exit 2 ;; esac
+case "$reference_source_list" in ''|/*|*'..'*) echo "invalid reference image list: $reference_source_list" >&2; exit 2 ;; esac
 reference_source_list="$REPO_ROOT/$reference_source_list"
 [ -f "$reference_source_list" ] || { echo "reference source list missing: $reference_source_list" >&2; exit 2; }
+if [ "$plan_only" = true ]; then
+  printf 'PIPELINE_KEY=%s\nPIPELINE=%s\nREVISION=%s\n' "$pipeline_key" "$pipeline" "$revision"
+  printf 'WORKFLOW_S3_KEY=%s\nDATA_S3_KEY=%s\nFIXTURE=%s\n' "$workflow_s3_key" "$data_s3_key" "$fixture"
+  printf 'REFERENCE_SOURCE_IMAGES=%s\nMODE=plan\nRESULT=SUCCESS\n' "$reference_source_list"
+  result_written=true
+  exit 0
+fi
+
+need aws
+need nextflow
+need jq
 workflow_s3_uri="${S3_ROOT%/}/${workflow_s3_key}"
 if [ "$data_s3_key" != - ]; then
   data_s3_uri="${S3_ROOT%/}/${data_s3_key}"

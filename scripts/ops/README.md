@@ -7,8 +7,8 @@ AWS_PROFILE=dev AWS_REGION=ap-southeast-1 ECR_TTL=31-12-27 \
   ./scripts/ops/create_ecr.sh sarek
 ```
 
-Approved pipeline names are `demo`, `bamtofastq`, `rnaseq`, and `sarek`.
-Existing repositories are only described. New repositories use immutable tags,
+Pipeline keys use lowercase letters, digits, and hyphens. Existing repositories
+are only described. New repositories use immutable tags,
 scan on push, and the required project tags. Keep `ENV` local; use
 `ENV.example` as its template.
 
@@ -24,22 +24,11 @@ or Sarek preview remains the source of truth.
 approved pipeline names and defaults to plan-only mode. `--execute` is required
 before it invokes Skopeo; it does not create ECR repositories.
 
-`run_all_ecr_distributions.sh` sequentially drives the retained historical
-demo, bamtofastq, and rnaseq Quay inventories. It is plan-only by default.
-With `--execute`, it creates only missing per-pipeline repositories through
-`create_ecr.sh`, then calls the generic runner once per pipeline. It writes an
-aggregate `RESULT.md`, `status.tsv`, and `.done`/`.failed` marker. Set
-`CODEX_QUEUE_THREAD` only for a verified session UUID; otherwise completion is
-signalled by durable evidence, desktop notification, and terminal bell.
-
 The online-server offline-emulation pipeline preparation uses `offline/pipeline_e2e.tsv`,
-`offline/discover_pipeline_e2e.sh`, and `offline/run_all_pipeline_discovery.sh`.
+and `offline/discover_pipeline_e2e.sh`.
 It resolves private S3 from local `scripts/ops/ENV` `S3_ROOT`, stages
 workflow/data assets, installs per-bundle plugins, and generates its manifest
 from inspected containers. It does not run Podman or tasks.
-`watch_pipeline_e2e_discovery.sh` is a read-only tmux progress display for
-that parallel preparation evidence directory.
-
 `offline/run_pipeline_e2e.sh` is the generic strict runtime half. It consumes
 one successful discovery bundle, relocates it, preloads only mapped ECR images
 into an isolated Podman store, then enforces bundle-local Nextflow state,
