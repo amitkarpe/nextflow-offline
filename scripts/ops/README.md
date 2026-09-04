@@ -16,6 +16,10 @@ scan on push, and the required project tags. Keep `ENV` local; use
 contract and copies with `COPY_ENGINE=skopeo`. It is the reusable preparation
 loop for `nextflow/sarek`; run `--dry-run` before copying a new manifest.
 
+`generate_sarek_ecr_manifest.sh` builds that manifest from the retained
+historical Sarek 3.4.4 22-image inventory. Run it before the mirror loop when
+the source list changes.
+
 Provenance for future agents: retain the manifest/evidence shape from
 `../offline/common/aws-validation/mirror-ecr-images-with-crane-container.sh`.
 Do not reuse that script's Docker/Crane engine here because this lane requires
