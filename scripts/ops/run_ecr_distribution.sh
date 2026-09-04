@@ -43,7 +43,7 @@ out_dir="${out_dir:-${HOME}/.AGENTS-temp/nextflow/${pipeline}-ecr-distribution-$
 mkdir -p "$out_dir"
 manifest="$out_dir/image-manifest.tsv"
 ECR_REPOSITORY="nextflow/$pipeline" SOURCE_LIST="$source_list" OUTPUT_MANIFEST="$manifest" \
-  "$SCRIPT_DIR/generate_sarek_ecr_manifest.sh" > "$out_dir/generate.log" 2>&1
+  "$SCRIPT_DIR/generate_ecr_manifest.sh" > "$out_dir/generate.log" 2>&1
 
 mirror_args=(--image-manifest "$manifest" --repository "nextflow/$pipeline" --out-dir "$out_dir/mirror")
 if [ "$execute" = true ]; then
@@ -51,7 +51,7 @@ if [ "$execute" = true ]; then
 else
   mirror_args+=(--dry-run)
 fi
-"$SCRIPT_DIR/mirror_sarek_ecr_images.sh" "${mirror_args[@]}" > "$out_dir/mirror.log" 2>&1
+"$SCRIPT_DIR/mirror_ecr_images.sh" "${mirror_args[@]}" > "$out_dir/mirror.log" 2>&1
 cp "$out_dir/mirror/RESULT.md" "$out_dir/RESULT.md"
 printf 'PIPELINE=%s\nECR_REPOSITORY=nextflow/%s\nEXECUTE=%s\n' "$pipeline" "$pipeline" "$execute" >> "$out_dir/RESULT.md"
 if [ "$execute" = true ]; then

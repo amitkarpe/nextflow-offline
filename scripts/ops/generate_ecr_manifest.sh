@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# Generates the established four-column ECR manifest from a pinned source
+# Generates the established four-column ECR manifest from a discovered source
 # inventory. Tags are deterministic source hashes so every row is
 # portable, collision-resistant, and within ECR's 128-character tag limit.
 

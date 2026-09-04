@@ -8,7 +8,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: mirror_sarek_ecr_images.sh [--image-manifest FILE] [--repository NAME] [--dry-run] [--continue-on-error]
+Usage: mirror_ecr_images.sh [--image-manifest FILE] [--repository NAME] [--dry-run] [--continue-on-error]
 
 Mirror the exact source-to-ECR rows in a four-column TSV. All rows must target
 one existing ECR repository. This command never creates an ECR

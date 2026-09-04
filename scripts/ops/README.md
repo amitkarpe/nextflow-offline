@@ -12,13 +12,13 @@ Existing repositories are only described. New repositories use immutable tags,
 scan on push, and the required project tags. Keep `ENV` local; use
 `ENV.example` as its template.
 
-`mirror_sarek_ecr_images.sh` reuses the historical four-column image-manifest
-contract and copies with `COPY_ENGINE=skopeo`. It is the reusable preparation
-loop for `nextflow/sarek`; run `--dry-run` before copying a new manifest.
+`mirror_ecr_images.sh` reuses the four-column image-manifest contract and
+copies with `COPY_ENGINE=skopeo`. It is the reusable preparation loop; run
+`--dry-run` before copying a new manifest.
 
-`generate_sarek_ecr_manifest.sh` builds that manifest from the retained
-historical Sarek 3.4.4 22-image inventory. Run it before the mirror loop when
-the source list changes.
+`generate_ecr_manifest.sh` builds that manifest from an exact discovered image
+list. Historical pipeline lists are known-good reference/cache only: discovery
+or Sarek preview remains the source of truth.
 
 `run_ecr_distribution.sh` is the generic operator entrypoint. It supports the
 approved pipeline names and defaults to plan-only mode. `--execute` is required
@@ -32,11 +32,11 @@ aggregate `RESULT.md`, `status.tsv`, and `.done`/`.failed` marker. Set
 `CODEX_QUEUE_THREAD` only for a verified session UUID; otherwise completion is
 signalled by durable evidence, desktop notification, and terminal bell.
 
-The home-local pipeline E2E preparation uses `offline/pipeline_e2e.tsv`,
+The online-server offline-emulation pipeline preparation uses `offline/pipeline_e2e.tsv`,
 `offline/discover_pipeline_e2e.sh`, and `offline/run_all_pipeline_discovery.sh`.
-It stages only private S3 workflow/data assets, installs per-bundle plugins,
-and fails closed unless every inspected process container has an exact mapping
-to the immutable per-pipeline ECR manifest. It does not run Podman or tasks.
+It resolves private S3 from local `scripts/ops/ENV` `S3_ROOT`, stages
+workflow/data assets, installs per-bundle plugins, and generates its manifest
+from inspected containers. It does not run Podman or tasks.
 `watch_pipeline_e2e_discovery.sh` is a read-only tmux progress display for
 that parallel preparation evidence directory.
 

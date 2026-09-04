@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# Home-server E2E runtime proof for one prepared pipeline bundle. Online setup
+# Online-server offline-emulation runtime proof for one prepared pipeline bundle. Online setup
 # may read private ECR. Once Nextflow starts, it uses a relocated bundle-local
 # workflow, data, plugin state, preloaded isolated Podman store, -offline, and
 # task --network none. This is offline emulation, not physical air-gap proof.
