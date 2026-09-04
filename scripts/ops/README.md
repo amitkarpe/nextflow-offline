@@ -40,6 +40,12 @@ to the immutable per-pipeline ECR manifest. It does not run Podman or tasks.
 `watch_pipeline_e2e_discovery.sh` is a read-only tmux progress display for
 that parallel preparation evidence directory.
 
+`offline/run_pipeline_e2e.sh` is the generic strict runtime half. It consumes
+one successful discovery bundle, relocates it, preloads only mapped ECR images
+into an isolated Podman store, then enforces bundle-local Nextflow state,
+explicit `-offline`, and Podman task network isolation. It rejects insufficient
+disk and any Podman pull after the strict Nextflow start.
+
 Provenance for future agents: retain the manifest/evidence shape from
 `../offline/common/aws-validation/mirror-ecr-images-with-crane-container.sh`.
 Do not reuse that script's Docker/Crane engine here because this lane requires

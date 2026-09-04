@@ -95,19 +95,27 @@ case "$fixture" in
   *) echo "unsupported discovery fixture: $fixture" >&2; exit 2 ;;
 esac
 discovery_config="$bundle_root/offline/discovery.config"
-cat > "$discovery_config" <<EOF
-params {
-  input = '$discovery_input'
-  outdir = '$bundle_root/offline/discovery-output'
-  genome = null
-  igenomes_ignore = true
-  validate_params = false
-  custom_config_base = null
-  custom_config_version = null
-  pipelines_testdata_base_path = null
-  modules_testdata_base_path = null
-}
-EOF
+{
+  printf '%s\n' 'params {'
+  printf "  input = '%s'\n" "$discovery_input"
+  printf "  outdir = '%s'\n" "$bundle_root/offline/discovery-output"
+  printf '%s\n' '  genome = null'
+  printf '%s\n' '  igenomes_ignore = true'
+  printf '%s\n' '  validate_params = false'
+  printf '%s\n' '  custom_config_base = null'
+  printf '%s\n' '  custom_config_version = null'
+  printf '%s\n' '  pipelines_testdata_base_path = null'
+  printf '%s\n' '  modules_testdata_base_path = null'
+  if [ "$fixture" = paired-fastq-reference ]; then
+    printf "  fasta = '%s'\n" "$bundle_root/data/genome.fasta"
+    printf "  gtf = '%s'\n" "$bundle_root/data/genes_with_empty_tid.gtf.gz"
+  fi
+  printf '%s\n' '}'
+  printf '%s\n' 'trace.enabled = false'
+  printf '%s\n' 'report.enabled = false'
+  printf '%s\n' 'timeline.enabled = false'
+  printf '%s\n' 'dag.enabled = false'
+} > "$discovery_config"
 
 mapfile -t plugins < <(grep -RhoE "id '[^']+'" "$bundle_root/workflow" 2>/dev/null | sed -E "s/^id '([^']+)'$/\1/" | sort -u || true)
 printf '%s\n' "${plugins[@]}" > "$bundle_root/manifests/plugins.txt"
@@ -117,12 +125,15 @@ for plugin in "${plugins[@]}"; do
     nextflow plugin install "$plugin"
 done
 
+inspect_args=(nextflow inspect "$bundle_root/workflow" -profile podman -c "$discovery_config" -format json \
+  --input "$discovery_input" --outdir "$bundle_root/offline/discovery-output")
+if [ "$fixture" = paired-fastq-reference ]; then
+  inspect_args+=(--fasta "$bundle_root/data/genome.fasta" --gtf "$bundle_root/data/genes_with_empty_tid.gtf.gz")
+fi
 NXF_HOME="$bundle_root/plugins/nextflow-home" \
 NXF_OFFLINE=true \
 NXF_PLUGIN_AUTOINSTALL=false \
-  timeout 180 nextflow inspect "$bundle_root/workflow" -profile podman \
-  -c "$discovery_config" -format json \
-  > "$bundle_root/manifests/inspect.json"
+  timeout 180 "${inspect_args[@]}" > "$bundle_root/manifests/inspect.json"
 jq -er '.processes | type == "array" and length > 0' "$bundle_root/manifests/inspect.json" >/dev/null
 
 ECR_REPOSITORY="nextflow/$pipeline_key" \
