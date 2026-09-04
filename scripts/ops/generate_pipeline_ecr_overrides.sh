@@ -80,7 +80,13 @@ config_tmp="$out_dir/nextflow-ecr-containers.config.tmp"
   printf '%s\n' '  cpus = 2'
   printf '%s\n' "  memory = '4.GB'"
   while IFS=$'\t' read -r process_name _source_image ecr_image; do
-    printf "  withName: '%s' { container = '%s' }\n" "$process_name" "$ecr_image"
+    # Exact process selectors override nf-core resource labels for the tiny
+    # smoke fixture; this is not a production resource recommendation.
+    printf "  withName: '%s' {\n" "$process_name"
+    printf "    container = '%s'\n" "$ecr_image"
+    printf '%s\n' '    cpus = 2'
+    printf '%s\n' "    memory = '4.GB'"
+    printf '%s\n' '  }'
   done < "$out_dir/mapped-containers.tsv"
   printf '%s\n' '}'
   printf '%s\n' 'podman.enabled = true'
