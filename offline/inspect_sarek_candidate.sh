@@ -107,6 +107,7 @@ cat > "$BUNDLE_ROOT/offline/params_sarek_offline.json" <<'EOF'
   "validate_params": false,
   "step": "mapping",
   "tools": "strelka",
+  "skip_tools": "baserecalibrator",
   "split_fastq": 0
 }
 EOF
@@ -160,18 +161,16 @@ image_count="$(wc -l < "$BUNDLE_ROOT/manifests/images.txt" | tr -d '[:space:]')"
 registries="$(tail -n +2 "$BUNDLE_ROOT/manifests/image-registries.tsv" | cut -f2 | sort -u | paste -sd, -)"
 printf 'PIPELINE=%s\n' "$PIPELINE" > "$BUNDLE_ROOT/manifests/result.env"
 printf 'REVISION=%s\n' "$REVISION" >> "$BUNDLE_ROOT/manifests/result.env"
-printf 'IMAGE_COUNT=%s\n' "$image_count" >> "$BUNDLE_ROOT/manifests/result.env"
-printf 'IMAGE_REGISTRIES=%s\n' "$registries" >> "$BUNDLE_ROOT/manifests/result.env"
+printf 'STATIC_IMAGE_COUNT=%s\n' "$image_count" >> "$BUNDLE_ROOT/manifests/result.env"
+printf 'STATIC_IMAGE_REGISTRIES=%s\n' "$registries" >> "$BUNDLE_ROOT/manifests/result.env"
 if [ "$quay_only" = yes ]; then
-  printf 'QUAY_ONLY=PASS\nOFFLINE_SAFE=true\nRESULT=SUCCESS\n' >> "$BUNDLE_ROOT/manifests/result.env"
+  printf 'STATIC_QUAY_ONLY=PASS\nQUAY_ONLY=UNKNOWN\nOFFLINE_SAFE=UNKNOWN_PENDING\nRESULT=BLOCKED\n' >> "$BUNDLE_ROOT/manifests/result.env"
 else
-  printf 'QUAY_ONLY=FAIL\nOFFLINE_SAFE=false\nRESULT=BLOCKED\n' >> "$BUNDLE_ROOT/manifests/result.env"
+  printf 'STATIC_QUAY_ONLY=FAIL\nQUAY_ONLY=UNKNOWN\nOFFLINE_SAFE=UNKNOWN_PENDING\nRESULT=BLOCKED\n' >> "$BUNDLE_ROOT/manifests/result.env"
 fi
 cat "$BUNDLE_ROOT/manifests/result.env"
 
-[ "$quay_only" = yes ] || {
-  echo "non-Quay image references are not offline-safe for this project" >&2
-  exit 3
-}
+echo "Static inspection includes conditional processes; it is not an active-path inventory."
+echo "An active-path proof is required before asserting QUAY_ONLY or OFFLINE_SAFE."
 
 echo "No container pull, save, load, or task execution was performed."
