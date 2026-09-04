@@ -66,6 +66,49 @@ if [ "$data_s3_uri" != - ]; then
   aws s3 sync "${data_s3_uri%/}/" "$bundle_root/data/" --only-show-errors
 fi
 
+# inspect evaluates required schema parameters even though it does not launch a
+# task. Build only local placeholder inputs here; the runtime phase replaces
+# them with the validated tiny fixture and never uses these discovery files.
+discovery_input="$bundle_root/offline/discovery-input.csv"
+case "$fixture" in
+  paired-fastq)
+    [ -f "$bundle_root/data/tiny_R1.fastq.gz" ] && [ -f "$bundle_root/data/tiny_R2.fastq.gz" ] || {
+      echo "paired discovery FASTQ files are missing" >&2
+      exit 1
+    }
+    printf 'sample,fastq_1,fastq_2\nDISCOVERY,%s,%s\n' \
+      "$bundle_root/data/tiny_R1.fastq.gz" "$bundle_root/data/tiny_R2.fastq.gz" > "$discovery_input"
+    ;;
+  paired-fastq-reference)
+    [ -f "$bundle_root/data/tiny_R1.fastq.gz" ] && [ -f "$bundle_root/data/tiny_R2.fastq.gz" ] || {
+      echo "RNA-seq discovery FASTQ files are missing" >&2
+      exit 1
+    }
+    printf 'sample,fastq_1,fastq_2,strandedness\nDISCOVERY,%s,%s,unstranded\n' \
+      "$bundle_root/data/tiny_R1.fastq.gz" "$bundle_root/data/tiny_R2.fastq.gz" > "$discovery_input"
+    ;;
+  generated-bam)
+    : > "$bundle_root/data/discovery-placeholder.bam"
+    printf 'sample_id,mapped,file_type\nDISCOVERY,%s,bam\n' \
+      "$bundle_root/data/discovery-placeholder.bam" > "$discovery_input"
+    ;;
+  *) echo "unsupported discovery fixture: $fixture" >&2; exit 2 ;;
+esac
+discovery_config="$bundle_root/offline/discovery.config"
+cat > "$discovery_config" <<EOF
+params {
+  input = '$discovery_input'
+  outdir = '$bundle_root/offline/discovery-output'
+  genome = null
+  igenomes_ignore = true
+  validate_params = false
+  custom_config_base = null
+  custom_config_version = null
+  pipelines_testdata_base_path = null
+  modules_testdata_base_path = null
+}
+EOF
+
 mapfile -t plugins < <(grep -RhoE "id '[^']+'" "$bundle_root/workflow" 2>/dev/null | sed -E "s/^id '([^']+)'$/\1/" | sort -u || true)
 printf '%s\n' "${plugins[@]}" > "$bundle_root/manifests/plugins.txt"
 for plugin in "${plugins[@]}"; do
@@ -77,7 +120,8 @@ done
 NXF_HOME="$bundle_root/plugins/nextflow-home" \
 NXF_OFFLINE=true \
 NXF_PLUGIN_AUTOINSTALL=false \
-  timeout 180 nextflow inspect "$bundle_root/workflow" -profile podman -format json \
+  timeout 180 nextflow inspect "$bundle_root/workflow" -profile podman \
+  -c "$discovery_config" -format json \
   > "$bundle_root/manifests/inspect.json"
 jq -er '.processes | type == "array" and length > 0' "$bundle_root/manifests/inspect.json" >/dev/null
 
