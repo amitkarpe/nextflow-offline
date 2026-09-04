@@ -27,8 +27,8 @@ if [ -f "$SCRIPT_DIR/ENV" ]; then
   set +a
 fi
 
-manifest="$REPO_ROOT/offline/sarek_ecr_images.tsv"
-out_dir="${OUT_DIR:-$REPO_ROOT/.sarek-ecr-mirror}"
+manifest=""
+out_dir="${OUT_DIR:-$REPO_ROOT/.ecr-mirror}"
 repository_name=""
 dry_run=false
 continue_on_error=false
@@ -46,6 +46,7 @@ done
 
 : "${AWS_PROFILE:?set AWS_PROFILE or scripts/ops/ENV}"
 : "${AWS_REGION:?set AWS_REGION or scripts/ops/ENV}"
+[ -n "$manifest" ] || die "--image-manifest is required"
 [ -f "$manifest" ] || die "manifest not found: $manifest"
 need aws
 need awk

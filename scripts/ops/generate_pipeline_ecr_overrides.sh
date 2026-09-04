@@ -90,7 +90,7 @@ config_tmp="$out_dir/nextflow-ecr-containers.config.tmp"
   done < "$out_dir/mapped-containers.tsv"
   printf '%s\n' '}'
   printf '%s\n' 'podman.enabled = true'
-  printf '%s\n' "podman.runOptions = '--network none'"
+  printf '%s\n' "podman.runOptions = '--network none --pull=never'"
 } > "$config_tmp"
 mv "$config_tmp" "$out_dir/nextflow-ecr-containers.config"
 printf 'PROCESSES=%s\n' "$(wc -l < "$out_dir/mapped-containers.tsv")"

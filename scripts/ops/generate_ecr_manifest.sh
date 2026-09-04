@@ -15,8 +15,8 @@ fi
 
 : "${AWS_PROFILE:?set AWS_PROFILE or scripts/ops/ENV}"
 : "${AWS_REGION:?set AWS_REGION or scripts/ops/ENV}"
-source_list="${SOURCE_LIST:-$REPO_ROOT/offline/sarek_source_images_3.4.4.txt}"
-output="${OUTPUT_MANIFEST:-$REPO_ROOT/offline/sarek_ecr_images.tsv}"
+source_list="${SOURCE_LIST:?set SOURCE_LIST}"
+output="${OUTPUT_MANIFEST:?set OUTPUT_MANIFEST}"
 repository_name="${ECR_REPOSITORY:-nextflow/sarek}"
 [ -f "$source_list" ] || { echo "source list missing: $source_list" >&2; exit 1; }
 case "$repository_name" in nextflow/*) ;; *) echo "repository must start with nextflow/: $repository_name" >&2; exit 2 ;; esac

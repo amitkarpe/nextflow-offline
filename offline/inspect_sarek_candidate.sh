@@ -7,7 +7,7 @@ PIPELINE="${PIPELINE:-nf-core/sarek}"
 REVISION="${REVISION:-3.5.1}"
 PROFILE="${PROFILE:-podman}"
 SOURCE_MODE="${SOURCE_MODE:-public}"
-PREVIEW_TIMEOUT_SECONDS="${PREVIEW_TIMEOUT_SECONDS:-300}"
+PREVIEW_TIMEOUT_SECONDS="${PREVIEW_TIMEOUT_SECONDS:-180}"
 : "${BUNDLE_ROOT:?BUNDLE_ROOT must name a fresh candidate directory}"
 
 need() {
@@ -177,10 +177,11 @@ static_registries="$(tail -n +2 "$BUNDLE_ROOT/manifests/static-image-registries.
 
 preview_log="$BUNDLE_ROOT/manifests/preview.log"
 preview_dag="$BUNDLE_ROOT/manifests/preview-dag.html"
+preview_dag_source=requested-path
 preview_rc=0
 (
   cd "$BUNDLE_ROOT"
-  timeout "$PREVIEW_TIMEOUT_SECONDS" nextflow run "$BUNDLE_ROOT/workflow" \
+  timeout -k 15s "$PREVIEW_TIMEOUT_SECONDS" nextflow run "$BUNDLE_ROOT/workflow" \
     -profile "$PROFILE,offline_smoke" \
     -params-file "$BUNDLE_ROOT/offline/params_sarek_offline.json" \
     -c "$BUNDLE_ROOT/offline/offline_test.conf" \
@@ -188,6 +189,16 @@ preview_rc=0
     -preview \
     -with-dag "$preview_dag"
 ) > "$preview_log" 2>&1 || preview_rc=$?
+
+if [ "$preview_rc" -ne 0 ] && grep -Fq 'Pipeline completed successfully' "$BUNDLE_ROOT/.nextflow.log"; then
+  generated_preview_dag="$(find "$BUNDLE_ROOT/null/pipeline_info" -maxdepth 1 -type f \
+    -name 'pipeline_dag_*.html' -print 2>/dev/null | sort | tail -n 1)"
+  if [ -n "$generated_preview_dag" ] && [ -s "$generated_preview_dag" ]; then
+    cp "$generated_preview_dag" "$preview_dag"
+    preview_dag_source=pipeline-info-fallback
+    preview_rc=0
+  fi
+fi
 
 if [ "$preview_rc" -eq 0 ] && [ -s "$preview_dag" ]; then
   awk '
@@ -238,7 +249,7 @@ if [ "$preview_rc" -ne 0 ]; then
     printf 'PIPELINE=%s\nREVISION=%s\n' "$PIPELINE" "$REVISION"
     printf 'STATIC_IMAGE_COUNT=%s\nSTATIC_IMAGE_REGISTRIES=%s\n' "$static_image_count" "$static_registries"
     if [ "$static_quay_only" = yes ]; then printf 'STATIC_QUAY_ONLY=PASS\n'; else printf 'STATIC_QUAY_ONLY=FAIL\n'; fi
-    printf 'PREVIEW_RC=%s\nPREVIEW_MODE=true\nNEXTFLOW_OFFLINE_FLAG=true\n' "$preview_rc"
+    printf 'PREVIEW_RC=%s\nPREVIEW_MODE=true\nPREVIEW_DAG_SOURCE=%s\nNEXTFLOW_OFFLINE_FLAG=true\n' "$preview_rc" "$preview_dag_source"
     printf 'PODMAN_ACTIONS=NONE_OBSERVED\nTASK_EXECUTION=NONE_OBSERVED\n'
     printf 'ACTIVE_IMAGE_COUNT=UNKNOWN\nQUAY_ONLY=UNKNOWN\n'
     printf 'OFFLINE_SAFE=UNKNOWN_PENDING\nRESULT=BLOCKED\n'
@@ -267,7 +278,7 @@ if [ -s "$BUNDLE_ROOT/manifests/unresolved-active-processes.txt" ]; then
     printf 'PIPELINE=%s\nREVISION=%s\n' "$PIPELINE" "$REVISION"
     printf 'STATIC_IMAGE_COUNT=%s\nSTATIC_IMAGE_REGISTRIES=%s\n' "$static_image_count" "$static_registries"
     if [ "$static_quay_only" = yes ]; then printf 'STATIC_QUAY_ONLY=PASS\n'; else printf 'STATIC_QUAY_ONLY=FAIL\n'; fi
-    printf 'PREVIEW_RC=0\nPREVIEW_MODE=true\nNEXTFLOW_OFFLINE_FLAG=true\n'
+    printf 'PREVIEW_RC=0\nPREVIEW_MODE=true\nPREVIEW_DAG_SOURCE=%s\nNEXTFLOW_OFFLINE_FLAG=true\n' "$preview_dag_source"
     printf 'PODMAN_ACTIONS=NONE_OBSERVED\nTASK_EXECUTION=NONE_OBSERVED\n'
     printf 'ACTIVE_IMAGE_COUNT=UNKNOWN\nQUAY_ONLY=UNKNOWN\n'
     printf 'OFFLINE_SAFE=UNKNOWN_PENDING\nRESULT=BLOCKED\n'
@@ -295,7 +306,7 @@ active_registries="$(tail -n +2 "$BUNDLE_ROOT/manifests/active-image-registries.
   printf 'PIPELINE=%s\nREVISION=%s\n' "$PIPELINE" "$REVISION"
   printf 'STATIC_IMAGE_COUNT=%s\nSTATIC_IMAGE_REGISTRIES=%s\n' "$static_image_count" "$static_registries"
   if [ "$static_quay_only" = yes ]; then printf 'STATIC_QUAY_ONLY=PASS\n'; else printf 'STATIC_QUAY_ONLY=FAIL\n'; fi
-  printf 'PREVIEW_RC=0\nPREVIEW_MODE=true\nNEXTFLOW_OFFLINE_FLAG=true\n'
+  printf 'PREVIEW_RC=0\nPREVIEW_MODE=true\nPREVIEW_DAG_SOURCE=%s\nNEXTFLOW_OFFLINE_FLAG=true\n' "$preview_dag_source"
   printf 'PODMAN_ACTIONS=NONE_OBSERVED\nTASK_EXECUTION=NONE_OBSERVED\n'
   printf 'ACTIVE_IMAGE_COUNT=%s\nACTIVE_IMAGE_REGISTRIES=%s\n' "$active_image_count" "$active_registries"
   if [ "$active_quay_only" = yes ]; then
@@ -305,5 +316,6 @@ active_registries="$(tail -n +2 "$BUNDLE_ROOT/manifests/active-image-registries.
   fi
 } > "$BUNDLE_ROOT/manifests/result.env"
 cat "$BUNDLE_ROOT/manifests/result.env"
+printf 'RESULT=SUCCESS\n' > "$BUNDLE_ROOT/.done"
 
 echo "No container pull, save, load, or task execution was performed."

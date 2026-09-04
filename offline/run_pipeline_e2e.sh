@@ -31,6 +31,7 @@ case "$pipeline_key" in demo|bamtofastq|rnaseq) ;; *) usage >&2; exit 2 ;; esac
 : "${AWS_REGION:?set AWS_REGION}"
 [ -d "$prepared_bundle" ] || { echo "prepared bundle missing: $prepared_bundle" >&2; exit 2; }
 [ -f "$prepared_bundle/.done" ] || { echo "prepared bundle is not successful: $prepared_bundle" >&2; exit 2; }
+[ -f "$prepared_bundle/manifests/files.sha256" ] || { echo "prepared bundle has no pre-relocation checksum inventory" >&2; exit 2; }
 [ -n "$test_root" ] || { usage >&2; exit 2; }
 
 result_written=false
@@ -89,21 +90,8 @@ done
 [ -f "$test_root/manifests/ecr-images.tsv" ] || { echo "ECR manifest missing" >&2; exit 1; }
 [ -f "$test_root/offline/nextflow-ecr-containers.config" ] || { echo "ECR override missing" >&2; exit 1; }
 
-current_step="validate relocated bundle checksums"
-if [ -f "$test_root/manifests/files.sha256" ]; then
-  ( cd "$test_root" && sha256sum -c manifests/files.sha256 ) > "$test_root/manifests/relocated-checksums.log"
-else
-  # Discovery bundles do not yet carry transfer checksums; create and validate
-  # a relocated inventory without modifying the source bundle.
-  (
-    cd "$test_root"
-    find . -type f \
-      ! -path './manifests/relocated-files.sha256' \
-      ! -path './manifests/relocated-checksums.log' -print0 |
-      sort -z | xargs -0 sha256sum
-  ) > "$test_root/manifests/relocated-files.sha256"
-  ( cd "$test_root" && sha256sum -c manifests/relocated-files.sha256 ) > "$test_root/manifests/relocated-checksums.log"
-fi
+current_step="validate pre-relocation checksums against copied bundle"
+( cd "$test_root" && sha256sum -c manifests/files.sha256 ) > "$test_root/manifests/relocated-checksums.log"
 
 current_step="preflight private ECR image sizes"
 image_bytes=0
@@ -184,12 +172,12 @@ EOF
   bamtofastq)
     samtools_image="$(awk -F '\t' '$1 == "quay.io/biocontainers/samtools:1.19.2--h50ea8bc_0" {print $4}' "$test_root/manifests/ecr-images.tsv")"
     [ -n "$samtools_image" ] || { echo "BAM fixture Samtools image mapping is missing" >&2; exit 1; }
-    cat > "$test_root/data/tiny.sam" <<EOF
-@HD\tVN:1.6\tSO:coordinate
-@SQ\tSN:chrTiny\tLN:1000
-tiny\t99\tchrTiny\t1\t60\t16M\t=\t41\t56\tACGTACGTACGTACGT\tIIIIIIIIIIIIIIII
-tiny\t147\tchrTiny\t41\t60\t16M\t=\t1\t-56\tTGCATGCATGCATGCA\tIIIIIIIIIIIIIIII
-EOF
+    printf '%b\n' \
+      '@HD\tVN:1.6\tSO:coordinate' \
+      '@SQ\tSN:chrTiny\tLN:1000' \
+      'tiny\t99\tchrTiny\t1\t60\t16M\t=\t41\t56\tACGTACGTACGTACGT\tIIIIIIIIIIIIIIII' \
+      'tiny\t147\tchrTiny\t41\t60\t16M\t=\t1\t-56\tTGCATGCATGCATGCA\tIIIIIIIIIIIIIIII' \
+      > "$test_root/data/tiny.sam"
     podman run --rm --network none -v "$test_root/data:/data" --entrypoint /bin/sh "$samtools_image" \
       -c 'samtools view -b -o /data/tiny.bam /data/tiny.sam && samtools index /data/tiny.bam'
     printf 'sample_id,mapped,file_type\nE2E,%s,bam\n' "$test_root/data/tiny.bam" > "$runtime_input"
@@ -239,6 +227,11 @@ EOF
 esac
 
 runtime_command_start="$(wc -l < "$command_log")"
+# Object stores preserve workflow bytes, not POSIX modes.  nf-core helper
+# scripts under workflow/bin are invoked directly by several pipelines.
+if [ -d "$test_root/workflow/bin" ]; then
+  find "$test_root/workflow/bin" -type f -exec chmod u+x {} +
+fi
 export NXF_HOME="$test_root/plugins/nextflow-home"
 export NXF_OFFLINE=true
 export NXF_PLUGIN_AUTOINSTALL=false
@@ -262,7 +255,7 @@ fi
 
 {
   printf 'PIPELINE_KEY=%s\n' "$pipeline_key"
-  printf 'RELOCATED_BUNDLE=PASS\nCHECKSUMS=PASS\n'
+  printf 'RELOCATED_BUNDLE=PASS\nSOURCE_CHECKSUMS=PASS\nCHECKSUMS=PASS\n'
   printf 'ECR_IMAGE_BYTES=%s\nDISK_PREFLIGHT=PASS\n' "$image_bytes"
   printf 'ECR_PRELOAD=PASS\n'
   printf 'NXF_HOME=bundle-local\nNXF_OFFLINE=true\nNXF_PLUGIN_AUTOINSTALL=false\n'

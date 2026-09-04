@@ -191,6 +191,20 @@ reference_stale="$(awk -F '\t' 'NR > 1 && $2 == "reference-not-in-discovery" {co
   printf 'ECR_OVERRIDE_MAPPING=PASS\n'
   printf 'PODMAN_ACTIONS=NONE_BY_SCRIPT\nTASK_EXECUTION=NONE_BY_SCRIPT\nRESULT=SUCCESS\n'
 } > "$bundle_root/RESULT.md"
+
+# Hash the completed source bundle before relocation. The copied runtime bundle
+# validates this inventory without relying on a hash it generated after copy.
+(
+  cd "$bundle_root"
+  find . -type f \
+    ! -path './manifests/files.sha256' \
+    ! -path './manifests/source-checksums.log' \
+    ! -path './.done' \
+    ! -path './.failed' -print0 |
+    sort -z | xargs -0 sha256sum
+) > "$bundle_root/manifests/files.sha256"
+( cd "$bundle_root" && sha256sum -c manifests/files.sha256 ) \
+  > "$bundle_root/manifests/source-checksums.log"
 printf 'RESULT=SUCCESS\n' > "$bundle_root/.done"
 result_written=true
 cat "$bundle_root/RESULT.md"
