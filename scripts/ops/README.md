@@ -24,6 +24,14 @@ the source list changes.
 approved pipeline names and defaults to plan-only mode. `--execute` is required
 before it invokes Skopeo; it does not create ECR repositories.
 
+`run_all_ecr_distributions.sh` sequentially drives the retained historical
+demo, bamtofastq, and rnaseq Quay inventories. It is plan-only by default.
+With `--execute`, it creates only missing per-pipeline repositories through
+`create_ecr.sh`, then calls the generic runner once per pipeline. It writes an
+aggregate `RESULT.md`, `status.tsv`, and `.done`/`.failed` marker. Set
+`CODEX_QUEUE_THREAD` only for a verified session UUID; otherwise completion is
+signalled by durable evidence, desktop notification, and terminal bell.
+
 Provenance for future agents: retain the manifest/evidence shape from
 `../offline/common/aws-validation/mirror-ecr-images-with-crane-container.sh`.
 Do not reuse that script's Docker/Crane engine here because this lane requires

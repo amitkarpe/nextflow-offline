@@ -33,6 +33,7 @@ trap cleanup EXIT
 printf 'source_image\trepository_name\ttag\tecr_image\n' > "$tmp_output"
 while IFS= read -r source_image; do
   [ -n "$source_image" ] || continue
+  case "$source_image" in \#*) continue ;; esac
   tag="src-$(printf '%s' "$source_image" | sha256sum | cut -c1-24)"
   printf '%s\t%s\t%s\t%s/%s:%s\n' \
     "$source_image" "$repository_name" "$tag" "$registry" "$repository_name" "$tag" >> "$tmp_output"

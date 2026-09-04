@@ -57,5 +57,7 @@ printf 'PIPELINE=%s\nECR_REPOSITORY=nextflow/%s\nEXECUTE=%s\n' "$pipeline" "$pip
 if [ "$execute" = true ]; then
   printf 'RESULT=SUCCESS\n' >> "$out_dir/RESULT.md"
   printf 'RESULT=SUCCESS\n' > "$out_dir/.done"
+else
+  printf 'IMAGE_COPY=NOT_RUN\nRESULT=SUCCESS\n' >> "$out_dir/RESULT.md"
 fi
 cat "$out_dir/RESULT.md"
