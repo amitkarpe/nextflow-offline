@@ -37,6 +37,8 @@ The home-local pipeline E2E preparation uses `offline/pipeline_e2e.tsv`,
 It stages only private S3 workflow/data assets, installs per-bundle plugins,
 and fails closed unless every inspected process container has an exact mapping
 to the immutable per-pipeline ECR manifest. It does not run Podman or tasks.
+`watch_pipeline_e2e_discovery.sh` is a read-only tmux progress display for
+that parallel preparation evidence directory.
 
 Provenance for future agents: retain the manifest/evidence shape from
 `../offline/common/aws-validation/mirror-ecr-images-with-crane-container.sh`.
