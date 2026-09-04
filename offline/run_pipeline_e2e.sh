@@ -36,6 +36,16 @@ case "$pipeline_key" in demo|bamtofastq|rnaseq) ;; *) usage >&2; exit 2 ;; esac
 result_written=false
 auth_file=""
 runroot=""
+current_step="initialization"
+on_error() {
+  local rc=$?
+  set +e
+  if [ -n "${test_root:-}" ]; then
+    mkdir -p "$test_root"
+    printf 'FAILED_STEP=%s\nEXIT_CODE=%s\n' "$current_step" "$rc" > "$test_root/ERROR.md"
+  fi
+  return "$rc"
+}
 on_exit() {
   local rc=$?
   if [ -n "$auth_file" ] && [ -f "$auth_file" ]; then
@@ -50,6 +60,7 @@ on_exit() {
     printf 'RESULT=FAILED\n' > "$test_root/.failed"
   fi
 }
+trap on_error ERR
 trap on_exit EXIT
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing command: $1" >&2; exit 1; }; }
@@ -59,11 +70,13 @@ need nextflow
 need sha256sum
 need awk
 
+current_step="prepare fresh relocated test root"
 mkdir -p "$test_root"
 [ -z "$(find "$test_root" -mindepth 1 -maxdepth 1 -print -quit)" ] || {
   echo "test root must be empty: $test_root" >&2
   exit 2
 }
+current_step="relocate prepared bundle"
 cp -a "$prepared_bundle/." "$test_root/"
 for inherited_marker in "$test_root/.done" "$test_root/.failed"; do
   if [ -f "$inherited_marker" ]; then
@@ -76,6 +89,7 @@ done
 [ -f "$test_root/manifests/ecr-images.tsv" ] || { echo "ECR manifest missing" >&2; exit 1; }
 [ -f "$test_root/offline/nextflow-ecr-containers.config" ] || { echo "ECR override missing" >&2; exit 1; }
 
+current_step="validate relocated bundle checksums"
 if [ -f "$test_root/manifests/files.sha256" ]; then
   ( cd "$test_root" && sha256sum -c manifests/files.sha256 ) > "$test_root/manifests/relocated-checksums.log"
 else
@@ -91,6 +105,7 @@ else
   ( cd "$test_root" && sha256sum -c manifests/relocated-files.sha256 ) > "$test_root/manifests/relocated-checksums.log"
 fi
 
+current_step="preflight private ECR image sizes"
 image_bytes=0
 printf 'ecr_image\timage_size_bytes\n' > "$test_root/manifests/ecr-image-sizes.tsv"
 while IFS=$'\t' read -r _source_image repository tag ecr_image; do
@@ -109,27 +124,36 @@ if [ "$available_bytes" -lt "$required_bytes" ]; then
   exit 1
 fi
 
+current_step="prepare isolated Podman store"
 podman_bin="$(command -v podman)"
 graphroot="$test_root/.podman/graph"
 runroot="$(mktemp -d "/run/user/$(id -u)/nextflow-e2e.XXXXXX")"
 wrapper_dir="$test_root/.podman/bin"
 mkdir -p "$graphroot" "$wrapper_dir"
 command_log="$test_root/.podman/commands.log"
-printf '%s\n' '#!/usr/bin/bash' \
-  "printf '%s\\t' \"\\$(date -Iseconds)\" >> '$command_log'" \
-  "printf '%q ' \"\\$@\" >> '$command_log'" \
-  "printf '\\n' >> '$command_log'" \
-  "exec '$podman_bin' --root '$graphroot' --runroot '$runroot' \"\\$@\"" \
-  > "$wrapper_dir/podman"
+{
+  printf '%s\n' '#!/usr/bin/bash' 'set -euo pipefail'
+  printf 'COMMAND_LOG=%q\n' "$command_log"
+  printf 'PODMAN_BIN=%q\n' "$podman_bin"
+  printf 'PODMAN_GRAPHROOT=%q\n' "$graphroot"
+  printf 'PODMAN_RUNROOT=%q\n' "$runroot"
+  printf '%s\n' 'printf "%s\\t" "$(date -Iseconds)" >> "$COMMAND_LOG"'
+  printf '%s\n' 'printf "%q " "$@" >> "$COMMAND_LOG"'
+  printf '%s\n' 'printf "\\n" >> "$COMMAND_LOG"'
+  printf '%s\n' 'exec "$PODMAN_BIN" --root "$PODMAN_GRAPHROOT" --runroot "$PODMAN_RUNROOT" "$@"'
+} > "$wrapper_dir/podman"
 chmod 0755 "$wrapper_dir/podman"
 export PATH="$wrapper_dir:$PATH"
+current_step="verify isolated Podman store is empty"
 [ -z "$(podman images -q)" ] || { echo "isolated Podman store is not empty" >&2; exit 1; }
 
 registry="$(awk -F '\t' 'NR == 2 {split($4, fields, "/"); print fields[1]; exit}' "$test_root/manifests/ecr-images.tsv")"
 [ -n "$registry" ] || { echo "ECR registry missing from manifest" >&2; exit 1; }
 auth_file="$test_root/.podman/ecr-auth.json"
+current_step="authenticate isolated Podman store to private ECR"
 aws ecr get-login-password --profile "$AWS_PROFILE" --region "$AWS_REGION" |
   podman login --authfile "$auth_file" --username AWS --password-stdin "$registry" >/dev/null
+current_step="preload private ECR images into isolated Podman store"
 while IFS=$'\t' read -r _source_image _repository _tag ecr_image; do
   [ "$ecr_image" = "ecr_image" ] && continue
   podman pull --authfile "$auth_file" "$ecr_image"
@@ -218,6 +242,7 @@ runtime_command_start="$(wc -l < "$command_log")"
 export NXF_HOME="$test_root/plugins/nextflow-home"
 export NXF_OFFLINE=true
 export NXF_PLUGIN_AUTOINSTALL=false
+current_step="run relocated Nextflow pipeline with strict offline controls"
 nextflow -log "$test_root/offline/nextflow.log" run "$test_root/workflow" \
   -profile podman \
   -offline \
