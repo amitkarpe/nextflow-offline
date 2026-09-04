@@ -7,7 +7,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: run_ecr_distribution.sh --pipeline {demo|bamtofastq|rnaseq|sarek} --source-list FILE [--execute]
+Usage: run_ecr_distribution.sh --pipeline KEY --source-list FILE [--execute]
 
 Default mode creates and validates a plan only. --execute starts the Skopeo
 registry-to-registry loop. The ECR repository nextflow/PIPELINE must already
@@ -34,7 +34,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-case "$pipeline" in demo|bamtofastq|rnaseq|sarek) ;; *) usage >&2; exit 2 ;; esac
+case "$pipeline" in [a-z0-9][a-z0-9-]*) ;; *) echo "invalid pipeline key: $pipeline" >&2; exit 2 ;; esac
 [ -f "$source_list" ] || { echo "source list missing: $source_list" >&2; exit 2; }
 : "${AWS_PROFILE:?set AWS_PROFILE}"
 : "${AWS_REGION:?set AWS_REGION}"

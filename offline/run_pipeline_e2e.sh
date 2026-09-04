@@ -8,7 +8,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: run_pipeline_e2e.sh --pipeline {demo|bamtofastq|rnaseq} --prepared-bundle DIR --test-root DIR
+Usage: run_pipeline_e2e.sh --pipeline KEY --prepared-bundle DIR --test-root DIR
 EOF
 }
 
@@ -26,7 +26,7 @@ while [ "$#" -gt 0 ]; do
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
-case "$pipeline_key" in demo|bamtofastq|rnaseq) ;; *) usage >&2; exit 2 ;; esac
+case "$pipeline_key" in [a-z0-9][a-z0-9-]*) ;; *) echo "invalid pipeline key: $pipeline_key" >&2; exit 2 ;; esac
 : "${AWS_PROFILE:?set AWS_PROFILE}"
 : "${AWS_REGION:?set AWS_REGION}"
 [ -d "$prepared_bundle" ] || { echo "prepared bundle missing: $prepared_bundle" >&2; exit 2; }
@@ -70,6 +70,15 @@ need podman
 need nextflow
 need sha256sum
 need awk
+
+descriptor="$REPO_ROOT/offline/pipeline_e2e.tsv"
+[ -f "$descriptor" ] || { echo "pipeline descriptor missing: $descriptor" >&2; exit 2; }
+row="$(awk -F '\t' -v key="$pipeline_key" 'NR > 1 && $1 == key { if (++count == 1) row = $0 } END { if (count != 1) exit 1; print row }' "$descriptor")" || {
+  echo "pipeline descriptor missing: $pipeline_key" >&2
+  exit 2
+}
+IFS=$'\t' read -r _key _pipeline _revision _workflow_s3_key _data_s3_key _reference_source_list fixture <<< "$row"
+case "$fixture" in paired-fastq|paired-fastq-reference|generated-bam) ;; *) echo "unsupported runtime fixture: $fixture" >&2; exit 2 ;; esac
 
 current_step="prepare fresh relocated test root"
 mkdir -p "$test_root"
@@ -152,8 +161,8 @@ auth_file=""
 
 runtime_config="$test_root/offline/runtime.config"
 runtime_input="$test_root/offline/runtime-input.csv"
-case "$pipeline_key" in
-  demo)
+case "$fixture" in
+  paired-fastq)
     printf 'sample,fastq_1,fastq_2\nE2E,%s,%s\n' \
       "$test_root/data/tiny_R1.fastq.gz" "$test_root/data/tiny_R2.fastq.gz" > "$runtime_input"
     cat > "$runtime_config" <<EOF
@@ -169,7 +178,7 @@ params {
 }
 EOF
     ;;
-  bamtofastq)
+  generated-bam)
     samtools_image="$(awk -F '\t' '$1 == "quay.io/biocontainers/samtools:1.19.2--h50ea8bc_0" {print $4}' "$test_root/manifests/ecr-images.tsv")"
     [ -n "$samtools_image" ] || { echo "BAM fixture Samtools image mapping is missing" >&2; exit 1; }
     printf '%b\n' \
@@ -194,7 +203,7 @@ params {
 }
 EOF
     ;;
-  rnaseq)
+  paired-fastq-reference)
     printf 'sample,fastq_1,fastq_2,strandedness\nE2E,%s,%s,unstranded\n' \
       "$test_root/data/tiny_R1.fastq.gz" "$test_root/data/tiny_R2.fastq.gz" > "$runtime_input"
     cat > "$runtime_config" <<EOF
@@ -223,7 +232,7 @@ params {
   skip_deseq2_qc = true
 }
 EOF
-    ;;
+  ;;
 esac
 
 runtime_command_start="$(wc -l < "$command_log")"

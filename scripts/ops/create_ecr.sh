@@ -10,9 +10,9 @@ fi
 
 pipeline="${1:-}"
 case "$pipeline" in
-  demo|bamtofastq|rnaseq|sarek) ;;
+  [a-z0-9][a-z0-9-]*) ;;
   *)
-    echo "usage: $0 {demo|bamtofastq|rnaseq|sarek}" >&2
+    echo "usage: $0 PIPELINE_KEY" >&2
     exit 2
     ;;
 esac

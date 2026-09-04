@@ -6,7 +6,7 @@ ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/.env}"
 [[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
 
 AWS_PROFILE="${AWS_PROFILE:-dev}"
-S3_ROOT="${S3_ROOT:-s3://trust-team/nextflow-offline}"
+S3_ROOT="${S3_ROOT:-}"
 PIPELINE="${PIPELINE:-demo}"
 REVISION="${REVISION:-1.0.2}"
 WORK_ROOT="${WORK_ROOT:-/tmp/nextflow-offline}"
@@ -20,11 +20,18 @@ TESTDATA_TSV="${TESTDATA_TSV:-$SCRIPT_DIR/testdata.tsv}"
 
 BUNDLE_NAME="${PIPELINE}-${REVISION}"
 BUNDLE_ROOT="${BUNDLE_ROOT:-$WORK_ROOT/$BUNDLE_NAME}"
-S3_BUNDLE_URI="${S3_BUNDLE_URI:-${S3_ROOT%/}/bundles/${BUNDLE_NAME}/${BUNDLE_CHANNEL}}"
+S3_BUNDLE_URI="${S3_BUNDLE_URI:-}"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing command: $1" >&2; exit 1; }; }
 for tool in nf-core nextflow jq curl sha256sum skopeo; do need "$tool"; done
 [[ "$PUBLISH_S3" == yes ]] && need aws
+if [[ "$PUBLISH_S3" == yes ]]; then
+  [[ -n "$S3_BUNDLE_URI" || -n "$S3_ROOT" ]] || {
+    echo "set S3_BUNDLE_URI or S3_ROOT when PUBLISH_S3=yes" >&2
+    exit 2
+  }
+  S3_BUNDLE_URI="${S3_BUNDLE_URI:-${S3_ROOT%/}/bundles/${BUNDLE_NAME}/${BUNDLE_CHANNEL}}"
+fi
 
 NEXTFLOW_BIN="$(command -v nextflow)"
 if grep -q '^export NXF_HOME=' "$NEXTFLOW_BIN" 2>/dev/null; then
