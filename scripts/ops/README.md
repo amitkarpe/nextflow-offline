@@ -20,6 +20,10 @@ loop for `nextflow/sarek`; run `--dry-run` before copying a new manifest.
 historical Sarek 3.4.4 22-image inventory. Run it before the mirror loop when
 the source list changes.
 
+`run_ecr_distribution.sh` is the generic operator entrypoint. It supports the
+approved pipeline names and defaults to plan-only mode. `--execute` is required
+before it invokes Skopeo; it does not create ECR repositories.
+
 Provenance for future agents: retain the manifest/evidence shape from
 `../offline/common/aws-validation/mirror-ecr-images-with-crane-container.sh`.
 Do not reuse that script's Docker/Crane engine here because this lane requires

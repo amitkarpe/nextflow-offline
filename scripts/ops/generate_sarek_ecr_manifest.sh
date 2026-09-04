@@ -1,8 +1,8 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# Generates the established four-column ECR manifest from the retained Sarek
-# 3.4.4 source inventory. Tags are deterministic source hashes so every row is
+# Generates the established four-column ECR manifest from a pinned source
+# inventory. Tags are deterministic source hashes so every row is
 # portable, collision-resistant, and within ECR's 128-character tag limit.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,7 +17,9 @@ fi
 : "${AWS_REGION:?set AWS_REGION or scripts/ops/ENV}"
 source_list="${SOURCE_LIST:-$REPO_ROOT/offline/sarek_source_images_3.4.4.txt}"
 output="${OUTPUT_MANIFEST:-$REPO_ROOT/offline/sarek_ecr_images.tsv}"
+repository_name="${ECR_REPOSITORY:-nextflow/sarek}"
 [ -f "$source_list" ] || { echo "source list missing: $source_list" >&2; exit 1; }
+case "$repository_name" in nextflow/*) ;; *) echo "repository must start with nextflow/: $repository_name" >&2; exit 2 ;; esac
 
 account_id="$(aws sts get-caller-identity --profile "$AWS_PROFILE" --query Account --output text)"
 registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
@@ -32,8 +34,8 @@ printf 'source_image\trepository_name\ttag\tecr_image\n' > "$tmp_output"
 while IFS= read -r source_image; do
   [ -n "$source_image" ] || continue
   tag="src-$(printf '%s' "$source_image" | sha256sum | cut -c1-24)"
-  printf '%s\tnextflow/sarek\t%s\t%s/nextflow/sarek:%s\n' \
-    "$source_image" "$tag" "$registry" "$tag" >> "$tmp_output"
+  printf '%s\t%s\t%s\t%s/%s:%s\n' \
+    "$source_image" "$repository_name" "$tag" "$registry" "$repository_name" "$tag" >> "$tmp_output"
 done < "$source_list"
 {
   head -n 1 "$tmp_output"
