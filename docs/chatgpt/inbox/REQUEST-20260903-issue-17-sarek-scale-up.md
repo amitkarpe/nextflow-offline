@@ -1,5 +1,12 @@
 # REQUEST — Issue #17 Sarek scale-up
 
+## Approved candidate reset
+
+Amit approved `nf-core/sarek` revision `3.5.1` after the initial `3.10.0`
+inventory gate was blocked by the unavailable `nf-core-utils@0.4.0` plugin.
+For this PR, that approved revision supersedes the earlier `3.10.0` target.
+The first implementation step remains a no-image, Quay-only inventory gate.
+
 ## Repository / tracking
 
 - Repository: `amitkarpe/nextflow-offline`
